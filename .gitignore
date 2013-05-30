@@ -1,0 +1,50 @@
+######################################################################
+# Below is mostly taken from the web. Common things to ignore for C++
+######################################################################
+
+# Compiled files
+*.slo
+*.lo
+*.o
+*.Plo
+*.so
+*.dylib
+*.lai
+*.la
+*.a
+
+# Temporary files
+*.swp
+*~
+*#
+.#*
+
+# Backup files
+*.bk
+*.backup
+
+# Ctags files
+tags
+TAGS
+
+# Build files
+Makefile
+Makefile.in
+*.deps/
+
+# Other version control systems
+.svn/
+
+# Callgrind output
+callgrind.out.*
+
+# Doxygen output
+latex/
+html/
+*header.html
+*txt_doxygenified.*
+
+########################################
+# Oomph-lib specific generated files
+########################################
+
