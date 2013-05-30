@@ -45,6 +45,6 @@ html/
 *txt_doxygenified.*
 
 ########################################
-# Oomph-lib specific generated files
+# Executables 
 ########################################
-
+lagrange_square/square0

@@ -84,7 +84,15 @@ namespace SquareLagrange
                           // all the information for this run.
   std::string Soln_dir = ""; // Where to put the solution.
 
+  // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
+  // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
+  // using OOMPH-LIB's GMRES even if we have Trilinos. This should be set in
+  // the problem constuctor as soon as we set the linear_solver_pt() for the
+  // problem.
   bool Using_trilinos_solver = false;
+
+  // Object to store the linear solver iterations and times.
+  DocLinearSolverInfo* Doc_linear_solver_info_pt;
 }
 
 /*
@@ -151,13 +159,13 @@ public:
 
  /// \short Constructor: Pass number of elements in x and y directions and
  /// lengths
- TiltedCavityProblem(DocLinearSolverInfo&);
+ TiltedCavityProblem();
 
  /// Update before solve is empty
  void actions_before_newton_solve()
  {
    // Initialise counters for each newton solve.
-   Doc_info_pt->setup_new_time_step();
+   Doc_linear_solver_info_pt->setup_new_time_step();
  }
 
  /// \short Update after solve is empty
@@ -203,7 +211,7 @@ public:
      solver_time = linear_solver_pt()->linear_solver_solution_time();
    }
 
-   Doc_info_pt->add_iteration_and_time(iters,solver_time);
+   Doc_linear_solver_info_pt->add_iteration_and_time(iters,solver_time);
  }
  /// Doc the solution
  void doc_solution();
@@ -233,7 +241,7 @@ private:
  // Solver
  IterativeLinearSolver* Solver_pt;
 
- DocLinearSolverInfo* Doc_info_pt;
+ DocLinearSolverInfo* Doc_linear_solver_info_pt;
 };
 
 
@@ -242,13 +250,12 @@ private:
 /// Problem constructor
 //====================================================================
 template<class ELEMENT> // rrrback - changed here.
-TiltedCavityProblem<ELEMENT>::TiltedCavityProblem
-(DocLinearSolverInfo &doc_info)
+TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 {
  // Alias the namespace for convenience
  namespace SL = SquareLagrange;
  
- Doc_info_pt = &doc_info;
+ Doc_linear_solver_info_pt = SL::Doc_linear_solver_info_pt;
 
  // Assign the boundaries:
  unsigned if_b=3;
@@ -568,7 +575,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem
  }
 
  // Set the doc info for book keeping purposes.
- prec_pt->set_doc_linear_solver_info_pt(&doc_info);
+ prec_pt->set_doc_linear_solver_info_pt(SL::Doc_linear_solver_info_pt);
 
  if(SL::Use_diagonal_w_block)
  {
@@ -787,8 +794,10 @@ int main(int argc, char* argv[])
  namespace SL = SquareLagrange;
 
  // Set up doc info
- DocLinearSolverInfo doc_info;
- //doc_info.number()=0;
+ DocLinearSolverInfo doc_linear_solver_info;
+ 
+ SL::Doc_linear_solver_info_pt = &doc_linear_solver_info;
+
  SL::Soln_dir = "RESLT";
 
  // Store commandline arguments
@@ -1063,7 +1072,7 @@ int main(int argc, char* argv[])
    }
  }
 
- TiltedCavityProblem< QTaylorHoodElement<2> > problem(doc_info);
+ TiltedCavityProblem< QTaylorHoodElement<2> > problem;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1113,7 +1122,7 @@ int main(int argc, char* argv[])
 
      // We now output the iteration and time.
      Vector<Vector<std::pair<unsigned, double> > > iters_times
-       = doc_info.iterations_and_times();
+       = SL::Doc_linear_solver_info_pt->iterations_and_times();
 
      // Below outputs the iteration counts and time.
      // Output the number of iterations
@@ -1195,7 +1204,7 @@ int main(int argc, char* argv[])
 
    // We now output the iteration and time.
    Vector<Vector<std::pair<unsigned, double> > > iters_times
-     = doc_info.iterations_and_times();
+     = SL::Doc_linear_solver_info_pt->iterations_and_times();
 
    // Below outputs the iteration counts and time.
    // Output the number of iterations
