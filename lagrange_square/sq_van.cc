@@ -50,7 +50,6 @@ namespace SquareLagrange
   // value.
 
   // Set the defaults.
-  unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
   unsigned NS_solver = 1; //CL, 0 = SuperLU, 1 - LSC
   unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
   unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
@@ -58,11 +57,8 @@ namespace SquareLagrange
   double Ang = 30.0; //CL, Angle in degrees
   double Rey = 100.0; //CL, Reynolds number
   unsigned Noel = 4; //CL, Number of elements in 1D
-  double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
-                             // the default is the norm of the momentum block.
 
-  std::string Prob_str = "SqPo"; //Set from CL, a unique identifier.
-  std::string W_str = "We"; //Set from CL, e - Exact(LU), no other solver.
+  std::string Prob_str = "SqVan"; //Set from CL, a unique identifier.
   std::string NS_str = "Nl"; //Set from CL, e - Exact, l - LSC
   std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
   std::string P_str = "Pe"; //Set from CL, e - Exact, a - AMG
@@ -70,12 +66,6 @@ namespace SquareLagrange
   std::string Ang_str = "A30"; //Set from CL, angle of rotation about the z axis
   std::string Rey_str = "R100"; //Set from CL, Reynolds number
   std::string Noel_str = "N4"; //Set from CL, Number of elements in 1D
-  std::string Sigma_str = ""; //Set from CL, sigma being used. is norm, then is
-                              // null.
-  std::string W_approx_str=""; //Set from CL, use diagonal approximation for W
-                               // block?
-  bool Use_axnorm = true; //Set from CL, use norm for sigma?
-  bool Use_diagonal_w_block = true; // To set from CL
   bool Loop_reynolds = false;
   bool Doc_prec = false; // To set from CL
   bool Doc_soln = false; // To set from CL
@@ -114,13 +104,13 @@ void print_hypre_preconditioner_parameters(HyprePreconditioner* h_prec_pt)
 //======================================================================
 
 template<class ELEMENT>
-class TiltedCavityProblem : public Problem
+class CavityProblem : public Problem
 {
 public:
 
  /// \short Constructor: Pass number of elements in x and y directions and
  /// lengths
- TiltedCavityProblem();
+ CavityProblem();
 
  /// Update before solve is empty
  void actions_before_newton_solve()
@@ -137,8 +127,10 @@ public:
  void actions_after_newton_step()
  {
    unsigned iters = 0;
+   double preconditioner_setup_time = 0.0;
    double solver_time = 0.0;
 
+   // Get the iteration counts.
 #ifdef PARANOID
    IterativeLinearSolver* iterative_solver_pt
      = dynamic_cast<IterativeLinearSolver*>
@@ -155,12 +147,22 @@ public:
    else
    {
      iters = iterative_solver_pt->iterations();
+     preconditioner_setup_time 
+       = iterative_solver_pt->preconditioner_pt()->setup_time();
    }
 #else
    iters = static_cast<IterativeLinearSolver*>
              (this->linear_solver_pt())->iterations();
+   preconditioner_setup_time = static_cast<IterativeLinearSolver*>
+             (this->linear_solver_pt())->preconditioner_pt()->setup_time();
+
 #endif
 
+   // Get the preconditioner setup time.
+   
+
+
+   // Set the solver time.
    if(SquareLagrange::Using_trilinos_solver)
    {
      TrilinosAztecOOSolver* trilinos_solver_pt 
@@ -172,7 +174,8 @@ public:
      solver_time = linear_solver_pt()->linear_solver_solution_time();
    }
 
-   Doc_linear_solver_info_pt->add_iteration_and_time(iters,solver_time);
+   Doc_linear_solver_info_pt->add_iteration_and_time
+     (iters,preconditioner_setup_time,solver_time);
  }
  /// Doc the solution
  void doc_solution();
@@ -193,7 +196,7 @@ private:
 /// Problem constructor
 //====================================================================
 template<class ELEMENT> // rrrback - changed here.
-TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
+CavityProblem<ELEMENT>::CavityProblem()
 {
  // Alias the namespace for convenience
  namespace SL = SquareLagrange;
@@ -297,145 +300,54 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  //Assgn equation numbers
  std::cout << "\n equation numbers : "<< assign_eqn_numbers() << std::endl;
 
- ////// Build the preconditioner
- NavierStokesSchurComplementPreconditioner* prec_pt
-   = new NavierStokesSchurComplementPreconditioner(this);
- prec_pt->set_navier_stokes_mesh(mesh_pt());
- Prec_pt = prec_pt;
 
  //////////////////////////////////////////////////////////////////////////////
  // Setting up the solver an preconditioners.
 
  // The preconditioner for the fluid block:
  if(SL::NS_solver == 0) // Exact solve.
- {}
+ {
+   ExactBlockPreconditioner<CRDoubleMatrix>* exact_block_prec_pt
+     = new ExactBlockPreconditioner<CRDoubleMatrix>;
+   exact_block_prec_pt->set_nmesh(1);
+   exact_block_prec_pt->set_mesh(0,mesh_pt());
+   Prec_pt = exact_block_prec_pt;
+ }
  else if(SL::NS_solver == 1) // LSC
  {
+   ////// Build the preconditioner
+   NavierStokesSchurComplementPreconditioner* lsc_prec_pt
+     = new NavierStokesSchurComplementPreconditioner(this);
+   lsc_prec_pt->set_navier_stokes_mesh(mesh_pt());
+   Prec_pt = lsc_prec_pt;
+
    // F block solve
    // Preconditioner for the F block:
    Preconditioner* f_preconditioner_pt = 0;
    // SL::F_solver == 0 is default, so do nothing.
-   if(SL::F_solver == 11)
+   if(SL::F_solver == 1)
    {
 #ifdef OOMPH_HAS_HYPRE
      // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_2D_poison_problem();
-#endif
-   }
-   else if(SL::F_solver == 12)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_navier_stokes_momentum_block();
-#endif
-   }
-   else if(SL::F_solver == 13)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_CLJPGSStrn075();
-#endif
-   }
-   else if(SL::F_solver == 14)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_RSGSStrn075();
-#endif
-   }
-   else if(SL::F_solver == 15)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_CLJPPilutStrn075();
-#endif
-   }
-   else if(SL::F_solver == 16)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_RSPilutStrn075();
-#endif
-   }
-   else if(SL::F_solver == 17)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_augmented_momentum_block();
-#endif
-   }
-   else if(SL::F_solver == 81)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_CLJPGSStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 82)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_CLJPJStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 83)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_CLJPPilutStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 84)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_RSGSStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 85)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_RSJStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 86)
-   {
-#ifdef OOMPH_HAS_HYPRE
-     // LSC takes type "Preconditioner".
-     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_for_RSPilutStrn0668();
-#endif
-   }
-   else if(SL::F_solver == 2)
-   {
-//     f_preconditioner_pt = new RayBlockDiagonalPreconditioner<CRDoubleMatrix>;
-     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
-   }
-   else if(SL::F_solver == 3)
-   {
-     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
-#ifdef OOMPH_HAS_HYPRE
-     dynamic_cast<BlockDiagonalPreconditioner<CRDoubleMatrix>* >
-       (f_preconditioner_pt)->set_subsidiary_preconditioner_function
-       (Hypre_Subsidiary_Preconditioner_Helper::set_hypre_for_2D_poison_problem);
-#endif
-   }
+     f_preconditioner_pt = new HyprePreconditioner;
 
+     // Cast it so we can fiddle with hypre settings
+     HyprePreconditioner* hypre_preconditioner_pt =
+       static_cast<HyprePreconditioner*>(f_preconditioner_pt);
+
+     Hypre_default_settings::
+     set_defaults_for_navier_stokes_momentum_block(hypre_preconditioner_pt);
+#else
+     std::ostringstream error_message;
+     error_message << "No Hypre detected...\n"
+                   << "Cannot set a hypre preconiditoner for f solve";
+     throw OomphLibError(error_message.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+#endif
+   }
    // Set the preconditioner in the LSC preconditioner.
-   prec_pt->set_f_preconditioner(f_preconditioner_pt);
+   lsc_prec_pt->set_f_preconditioner(f_preconditioner_pt);
    
    // P block solve
    //SL::P_solver == 0 is default, so do nothing.
@@ -450,7 +362,14 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
      Hypre_default_settings::
      set_defaults_for_2D_poisson_problem(hypre_preconditioner_pt);
 
-     prec_pt->set_p_preconditioner(p_preconditioner_pt);
+     lsc_prec_pt->set_p_preconditioner(p_preconditioner_pt);
+#else
+     std::ostringstream error_message;
+     error_message << "No Hypre detected...\n"
+                   << "Cannot set a hypre preconiditoner for p solve.";
+     throw OomphLibError(error_message.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
 #endif
    }
  } // if for using LSC as NS prec.
@@ -460,18 +379,18 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  }
 
  // Build solve and preconditioner
-#ifdef OOMPH_HAS_TRILINOS
- TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
- trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
- Solver_pt = trilinos_solver_pt;
- SL::Using_trilinos_solver = true;
-#else
+//#ifdef OOMPH_HAS_TRILINOS
+// TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
+// trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
+// Solver_pt = trilinos_solver_pt;
+// SL::Using_trilinos_solver = true;
+//#else
  Solver_pt = new GMRES<CRDoubleMatrix>;
  // We use RHS preconditioning. Note that by default,
  // left hand preconditioning is used.
  static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
  SL::Using_trilinos_solver = false;
-#endif
+//#endif
 
  Solver_pt->tolerance() = 1.0e-6;
  this->newton_solver_tolerance() = 1.0e-6;
@@ -485,14 +404,14 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 /// Doc the solution
 //========================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::doc_solution()
+void CavityProblem<ELEMENT>::doc_solution()
 {
 
   namespace SL = SquareLagrange;
   
   std::ofstream some_file;
   std::stringstream filename;
-  filename << SL::Soln_dir<<"/"<<SL::Label;
+  filename << SL::Soln_dir<<"/"<<SL::Label<<".dat";
 
   // Number of plot points
   unsigned npts=5;
@@ -556,7 +475,6 @@ int main(int argc, char* argv[])
  // Flag to output the preconditioner, used for debugging.
  CommandLineArgs::specify_command_line_flag("--doc_prec");
 
- CommandLineArgs::specify_command_line_flag("--w_solver", &SL::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &SL::NS_solver);
  CommandLineArgs::specify_command_line_flag("--p_solver", &SL::P_solver);
  CommandLineArgs::specify_command_line_flag("--f_solver", &SL::F_solver);
@@ -564,11 +482,8 @@ int main(int argc, char* argv[])
  CommandLineArgs::specify_command_line_flag("--ang", &SL::Ang);
  CommandLineArgs::specify_command_line_flag("--rey", &SL::Rey);
  CommandLineArgs::specify_command_line_flag("--noel", &SL::Noel);
- CommandLineArgs::specify_command_line_flag("--sigma",
-                                            &SL::Scaling_sigma);
- CommandLineArgs::specify_command_line_flag("--bdw");
 
- // These are deat with in rayheader.h
+ // These are dealt with in rayheader.h
  CommandLineArgs::specify_command_line_flag("--amg_str", &RayParam::amg_strength);
  CommandLineArgs::specify_command_line_flag("--amg_damp", &RayParam::amg_damping);
 
@@ -596,33 +511,11 @@ int main(int argc, char* argv[])
  // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
  // straight describes the velocity flow field. Po = Parallel outflow
  // describes the boundary type.
- SL::Prob_str = "SqPo";
+ SL::Prob_str = "SqVan";
 
  // Set the strings to identify the preconditioning,
  // This is used purely for book keeping purposes.
  
- // Default: W_solver = 0, W_str = We
- if(CommandLineArgs::command_line_flag_has_been_set("--w_solver"))
- {
-  switch(SL::W_solver)
-  {
-    case 0:
-      SL::W_str = "We";
-      break;
-    case 1:
-    {
-      pause("No other W block solver coded."); 
-      SL::W_str = "Wa";
-    }
-      break;
-    default:
-      std::cout << "Do not recognise W: " << SL::W_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = 1\n"
-                << "Using default: Exact (W_solver = 0)"<< std::endl;
-  }  // switch
- } // if
-
  // Default: NS_solver = 1, NS_str = Nl
  if(CommandLineArgs::command_line_flag_has_been_set("--ns_solver"))
  {
@@ -663,10 +556,15 @@ int main(int argc, char* argv[])
       SL::P_str = "Pa";
       break;
     default:
-      std::cout << "Do not recognise P: " << SL::P_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = 1\n"
-                << "Using default: Exact P solve (P_solver = 0)"<< std::endl;
+    {
+      std::ostringstream error_message;
+      error_message << "Do not recognise P_solver = " 
+                    << SL::P_solver << std::endl;
+
+      throw OomphLibError(error_message.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
   }  // switch
  } // if
 
@@ -684,56 +582,19 @@ int main(int argc, char* argv[])
     case 0:
       SL::F_str = "Fe";
       break;
-    case 11:
-      SL::F_str = "Fh2dp";
-      break;
-    case 12:
-      SL::F_str = "Fhns";
-      break;
-    case 13:
-      SL::F_str = "CLJPGSStrn075";
-      break;
-    case 14:
-      SL::F_str = "FRSGSStrn075";
-      break;
-    case 15:
-      SL::F_str = "FCLJPPilutStrn075";
-      break;
-    case 16:
-      SL::F_str = "FRSPilutStrn075";
-      break;
-    case 17:
-      SL::F_str = "Fray"; // I have no short hand for this...
-      break;
-    case 81:
-      SL::F_str = "CLJPGSStrn0668";
-      break;
-    case 82:
-      SL::F_str = "CLJPJStrn0668";
-      break;
-    case 83:
-      SL::F_str = "CLJPPilutStrn0668";
-      break;
-    case 84:
-      SL::F_str = "RSGSStrn0668";
-      break;
-    case 85:
-      SL::F_str = "RSJStrn0668";
-      break;
-    case 86:
-      SL::F_str = "RSPilutStrn0668";
-      break;
-    case 2:
-      SL::F_str = "Fde";
-      break;
-    case 3:
-      SL::F_str = "Fda";
+    case 1:
+      SL::F_str = "Fa";
       break;
     default:
-      std::cout << "Do not recognise F: " << SL::F_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = xxx Look in the code...\n"
-                << "Using default: Exact F solve (F_solver = 0)"<< std::endl;
+    {
+      std::ostringstream error_message;
+      error_message << "Do not recognise F_solver = " 
+                    << SL::F_solver << std::endl;
+
+      throw OomphLibError(error_message.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
   }  // switch
  } // if
  
@@ -781,28 +642,6 @@ int main(int argc, char* argv[])
    SL::Noel_str = strs.str();
  }
 
- // Set Use_axnorm, if sigma has not been set, norm os momentum block is used.
- if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
- {
-   SL::Use_axnorm = false;
-
-   std::ostringstream strs;
-   strs << "S" << SL::Scaling_sigma;
-   SL::Sigma_str = strs.str();
- }
-
- // use the diagonal or block diagonal approximation for W block.
- if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
- {
-   SL::Use_diagonal_w_block = false;
-   SL::W_approx_str = "bdw";
- }
- else
- {
-   SL::Use_diagonal_w_block = true;
-   SL::W_approx_str = "";
- }
-
  // Solve with Taylor-Hood element, set up problem
  // Set Rey_str, used for book keeping.
  if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
@@ -819,122 +658,121 @@ int main(int argc, char* argv[])
    }
  }
 
- TiltedCavityProblem< QTaylorHoodElement<2> > problem;
+ CavityProblem< QTaylorHoodElement<2> > problem;
 
 
 ///////////////////////////////////////////////////////////////////////////////
 
  if(SL::Loop_reynolds)
  {
-   double Rey_start = 0.0;
-   double Rey_end = 300.0;
-   for (SL::Rey = Rey_start; SL::Rey < Rey_end; SL::Rey += 100.0) 
-   {
-     std::ostringstream strs;
-     strs << "R" << SL::Rey;
-     SL::Rey_str = strs.str();
-
-     // Setup the label. Used for doc solution and preconditioner.
-     if(SL::NS_solver == 0)
-     {
-       SL::Label = SL::Prob_str + SL::W_str + SL::NS_str + SL::Vis_str
-         + SL::Ang_str + SL::Rey_str + SL::Noel_str
-         + SL::W_approx_str + SL::Sigma_str;
-     }
-     else if(SL::NS_solver == 1)
-     {
-       SL::Label = SL::Prob_str
-         + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-         + SL::Vis_str + SL::Ang_str + SL::Rey_str
-         + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
-     }
-     else
-     {
-       pause("There is no such NS preconditioner");
-     }
-
-     time_t rawtime;
-     time(&rawtime);
-
-     std::cout << "RAYDOING: "
-       << SL::Label
-       << " on " << ctime(&rawtime) << std::endl;
-
-
-     // Solve the problem
-     problem.newton_solve();
-
-     //Output solution
-     if(SL::Doc_soln){problem.doc_solution();}
-
-     // We now output the iteration and time.
-     Vector<Vector<std::pair<unsigned, double> > > iters_times
-       = SL::Doc_linear_solver_info_pt->iterations_and_times();
-
-     // Below outputs the iteration counts and time.
-     // Output the number of iterations
-     // Since this is a steady state problem, there is only
-     // one "time step".
-     //*
-
-     // Loop over the time step:
-     unsigned ntimestep = iters_times.size();
-
-     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
-     {
-       // New timestep:
-       std::cout << "RAYITS:\t" << intimestep << "\t";
-       // Loop through the Newtom Steps
-       unsigned nnewtonstep = iters_times[intimestep].size();
-       unsigned sum_of_newtonstep_iters = 0;
-       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
-           innewtonstep++)
-       {
-         sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep].first;
-         std::cout << iters_times[intimestep][innewtonstep].first << " ";
-       }
-       double average_its = ((double)sum_of_newtonstep_iters)
-         / ((double)nnewtonstep);
-
-       // Print to one decimal place if the average is not an exact
-       // integer. Ohterwise we print normally.
-       ((unsigned(average_its*10))%10)?
-         std::cout << "\t"<< std::fixed << std::setprecision(1)
-         << average_its << "(" << nnewtonstep << ")" << std::endl:
-         std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
-
-     }
-
-     // Now doing the times
-     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
-     {
-       // New timestep:
-       std::cout << "RAYTIME:\t" << intimestep << "\t";
-       // Loop through the Newtom Steps
-       unsigned nnewtonstep = iters_times[intimestep].size();
-       double sum_of_newtonstep_times = 0;
-       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
-           innewtonstep++)
-       {
-         sum_of_newtonstep_times += iters_times[intimestep][innewtonstep].second;
-         std::cout << iters_times[intimestep][innewtonstep].second << " ";
-       }
-       double average_time = ((double)sum_of_newtonstep_times)
-         / ((double)nnewtonstep);
-
-       // Print to one decimal place if the average is not an exact
-       // integer. Ohterwise we print normally.
-       std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
-     } // for timesteps
-   }
+//   double Rey_start = 0.0;
+//   double Rey_end = 300.0;
+//   for (SL::Rey = Rey_start; SL::Rey < Rey_end; SL::Rey += 100.0) 
+//   {
+//     std::ostringstream strs;
+//     strs << "R" << SL::Rey;
+//     SL::Rey_str = strs.str();
+//
+//     // Setup the label. Used for doc solution and preconditioner.
+//     if(SL::NS_solver == 0)
+//     {
+//       SL::Label = SL::Prob_str + SL::NS_str + SL::Vis_str
+//         + SL::Ang_str + SL::Rey_str + SL::Noel_str;
+//     }
+//     else if(SL::NS_solver == 1)
+//     {
+//       SL::Label = SL::Prob_str
+//         + SL::NS_str + SL::F_str + SL::P_str
+//         + SL::Vis_str + SL::Ang_str + SL::Rey_str
+//         + SL::Noel_str;
+//     }
+//     else
+//     {
+//       pause("There is no such NS preconditioner");
+//     }
+//
+//     time_t rawtime;
+//     time(&rawtime);
+//
+//     std::cout << "RAYDOING: "
+//       << SL::Label
+//       << " on " << ctime(&rawtime) << std::endl;
+//
+//
+//     // Solve the problem
+//     problem.newton_solve();
+//
+//     //Output solution
+//     if(SL::Doc_soln){problem.doc_solution();}
+//
+//     // We now output the iteration and time.
+//     Vector<Vector<std::pair<unsigned, double> > > iters_times
+//       = SL::Doc_linear_solver_info_pt->iterations_and_times();
+//
+//     // Below outputs the iteration counts and time.
+//     // Output the number of iterations
+//     // Since this is a steady state problem, there is only
+//     // one "time step".
+//     //*
+//
+//     // Loop over the time step:
+//     unsigned ntimestep = iters_times.size();
+//
+//     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+//     {
+//       // New timestep:
+//       std::cout << "RAYITS:\t" << intimestep << "\t";
+//       // Loop through the Newtom Steps
+//       unsigned nnewtonstep = iters_times[intimestep].size();
+//       unsigned sum_of_newtonstep_iters = 0;
+//       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+//           innewtonstep++)
+//       {
+//         sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep].first;
+//         std::cout << iters_times[intimestep][innewtonstep].first << " ";
+//       }
+//       double average_its = ((double)sum_of_newtonstep_iters)
+//         / ((double)nnewtonstep);
+//
+//       // Print to one decimal place if the average is not an exact
+//       // integer. Ohterwise we print normally.
+//       ((unsigned(average_its*10))%10)?
+//         std::cout << "\t"<< std::fixed << std::setprecision(1)
+//         << average_its << "(" << nnewtonstep << ")" << std::endl:
+//         std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+//
+//     }
+//
+//     // Now doing the times
+//     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+//     {
+//       // New timestep:
+//       std::cout << "RAYTIME:\t" << intimestep << "\t";
+//       // Loop through the Newtom Steps
+//       unsigned nnewtonstep = iters_times[intimestep].size();
+//       double sum_of_newtonstep_times = 0;
+//       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+//           innewtonstep++)
+//       {
+//         sum_of_newtonstep_times += iters_times[intimestep][innewtonstep].second;
+//         std::cout << iters_times[intimestep][innewtonstep].second << " ";
+//       }
+//       double average_time = ((double)sum_of_newtonstep_times)
+//         / ((double)nnewtonstep);
+//
+//       // Print to one decimal place if the average is not an exact
+//       // integer. Ohterwise we print normally.
+//       std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+//     } // for timesteps
+//   }
  }
  else
  {
    // Setup the label. Used for doc solution and preconditioner.
    SL::Label = SL::Prob_str
-               + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
+               + SL::NS_str + SL::F_str + SL::P_str
                + SL::Vis_str + SL::Ang_str + SL::Rey_str
-               + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
+               + SL::Noel_str;
 
    time_t rawtime;
    time(&rawtime);
@@ -950,7 +788,7 @@ int main(int argc, char* argv[])
    if(SL::Doc_soln){problem.doc_solution();}
 
    // We now output the iteration and time.
-   Vector<Vector<std::pair<unsigned, double> > > iters_times
+   Vector<Vector<Vector<double> > > iters_times
      = SL::Doc_linear_solver_info_pt->iterations_and_times();
 
    // Below outputs the iteration counts and time.
@@ -959,20 +797,22 @@ int main(int argc, char* argv[])
    // one "time step".
    //*
 
-   // Loop over the time step:
+   // Loop over the time steps and output the iterations, prec setup time and
+   // linear solver time.
    unsigned ntimestep = iters_times.size();
    for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
    {
      // New timestep:
      std::cout << "RAYITS:\t" << intimestep << "\t";
+     
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      unsigned sum_of_newtonstep_iters = 0;
      for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
          innewtonstep++)
      {
-       sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep].first;
-       std::cout << iters_times[intimestep][innewtonstep].first << " ";
+       sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep][0];
+       std::cout << iters_times[intimestep][innewtonstep][0] << " ";
      }
      double average_its = ((double)sum_of_newtonstep_iters)
        / ((double)nnewtonstep);
@@ -985,22 +825,43 @@ int main(int argc, char* argv[])
        << average_its << "(" << nnewtonstep << ")" << std::endl:
        std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
      std::cout << std::setprecision(cout_precision);
-
    }
 
-   // Now doing the times
+   // Now doing the preconditioner setup time.
    for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
    {
      // New timestep:
-     std::cout << "RAYTIME:\t" << intimestep << "\t";
+     std::cout << "RAYPRECSETUP:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
      for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
          innewtonstep++)
      {
-       sum_of_newtonstep_times += iters_times[intimestep][innewtonstep].second;
-       std::cout << iters_times[intimestep][innewtonstep].second << " ";
+       sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][1];
+       std::cout << iters_times[intimestep][innewtonstep][1] << " ";
+     }
+     double average_time = ((double)sum_of_newtonstep_times)
+       / ((double)nnewtonstep);
+
+     // Print to one decimal place if the average is not an exact
+     // integer. Otherwise we print normally.
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+   }
+
+   // Now doing the linear solver time.
+   for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+   {
+     // New timestep:
+     std::cout << "RAYLINSOLVER:\t" << intimestep << "\t";
+     // Loop through the Newtom Steps
+     unsigned nnewtonstep = iters_times[intimestep].size();
+     double sum_of_newtonstep_times = 0;
+     for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+         innewtonstep++)
+     {
+       sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][2];
+       std::cout << iters_times[intimestep][innewtonstep][2] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
