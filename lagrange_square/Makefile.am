@@ -1,10 +1,16 @@
 noinst_PROGRAMS= \
-square0 
+sq_po \
+sq_van 
 
 #------------------------------------------------------------------------
-square0_SOURCES = square0.cc
+sq_po_SOURCES = sq_po.cc
 
-square0_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+sq_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+#------------------------------------------------------------------------
+sq_van_SOURCES = sq_van.cc
+
+sq_van_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 # Include path for library headers: All library headers live in 
 # the include directory which we specify with -I

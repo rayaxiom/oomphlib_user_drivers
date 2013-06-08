@@ -5,6 +5,7 @@ NOEL=$2
 
 RAYMACHINE=$HOSTNAME # wulfling.maths.manchester.ac.uk, rice, cake...
 OOMPHBASE="/home/ray/oomphlib/clean_checkout"
+FILE="square_vanilla"
 
 # Flags:
 # --doc_soln - if present, doc the solution.
@@ -23,24 +24,31 @@ OOMPHBASE="/home/ray/oomphlib/clean_checkout"
 # --amg_damp", &RayParam::amg_damping);
 
 
-WS=0
-NS=0
-V=0
-A=30
-R=100
+WS="0"
+NS="1"
+V="0"
+A="0"
+R="100"
+
 function run_code {
 if [ "$NPROC" = "0" ]; then
-./square0 --w_solver $WS --ns_solver $NS --visc $V \
+./$FILE --w_solver $WS --ns_solver $NS --visc $V \
           --ang $A --rey $R --noel $NOEL
 else
-mpirun -np $NPROC ./square0 --w_solver $WS --ns_solver $NS \
+mpirun -np $NPROC ./$FILE --w_solver $WS --ns_solver $NS \
                             --visc $V --ang $A --rey $R --noel $NOEL 
+#NS="1"
+#F="0"
+#P="0"
+#mpirun -np $NPROC ./square0 \
+#  --w_solver $WS --ns_solver $NS --f_solver $F --p_solver $P \
+#  --visc $V --ang $A --rey $R --noel $NOEL
 fi
 }
 
-cd $OOMPHBASE/src/ && make && make install && \
-cd $OOMPHBASE/user_drivers/lagrange_square/ && \
-make square0 && \
+#cd $OOMPHBASE/src/ && make && make install && \
+#cd $OOMPHBASE/user_drivers/lagrange_square/ && \
+make $FILE && \
 run_code
 
 
