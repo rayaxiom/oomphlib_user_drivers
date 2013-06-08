@@ -47,4 +47,5 @@ html/
 ########################################
 # Executables 
 ########################################
-lagrange_square/square0
+lagrange_square/sq_po
+lagrange_square/sq_van

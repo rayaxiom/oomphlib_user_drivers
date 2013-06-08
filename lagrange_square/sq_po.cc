@@ -548,6 +548,35 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
        (Hypre_Subsidiary_Preconditioner_Helper::set_hypre_for_2D_poison_problem);
 #endif
    }
+   else if (SL::F_solver == 69)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // AMG coarsening: Ruge-Stuben
+     RayParam::amg_coarsening = 1;
+     
+     // AMG smoother: Gauss-Seidel
+     RayParam::amg_smoother=0;
+     
+     // There is no damping with GS, otherwise we set the parameter:
+     // RayParam::amg_damping
+
+     // Different amg strength for simple/stress divergence for viscuous term.
+     if(SL::Vis == 0)
+     {
+       // Simple form
+       RayParam::amg_strength = 0.25;
+     }
+     else
+     {
+       // Stress divergence form
+       RayParam::amg_strength = 0.668;
+     }
+     
+     // Setup the preconditioner.
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_using_2D_poisson_base();
+#endif
+   }
 
    // Set the preconditioner in the LSC preconditioner.
    ns_preconditioner_pt->set_f_preconditioner(f_preconditioner_pt);
@@ -608,6 +637,9 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
  SL::Using_trilinos_solver = false;
 #endif
+
+ Solver_pt->tolerance() = 1.0e-6;
+ this->newton_solver_tolerance() = 1.0e-6;
 
  // Set solver and preconditioner
  Solver_pt->preconditioner_pt() = Prec_pt;
