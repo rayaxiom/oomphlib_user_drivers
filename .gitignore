@@ -44,6 +44,9 @@ html/
 *header.html
 *txt_doxygenified.*
 
+# OOMPH-LIB result directory
+RESLT
+
 ########################################
 # Executables 
 ########################################
