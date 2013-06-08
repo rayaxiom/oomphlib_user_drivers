@@ -2,6 +2,7 @@
 
 NPROC=$1
 NOEL=$2
+FILE="sq_po"
 
 RAYMACHINE=$HOSTNAME # wulfling.maths.manchester.ac.uk, rice, cake...
 OOMPHBASE="/home/ray/oomphlib/clean_checkout"
@@ -25,17 +26,17 @@ OOMPHBASE="/home/ray/oomphlib/clean_checkout"
 
 WS="0"
 NS="1"
-V="0"
-A="0"
-R="100"
+V="1"
+A="30"
+R="200"
 
 function run_code {
 if [ "$NPROC" = "0" ]; then
-./square0 --w_solver $WS --ns_solver $NS --visc $V \
+./$FILE --w_solver $WS --ns_solver $NS --visc $V \
           --ang $A --rey $R --noel $NOEL
 else
-mpirun -np $NPROC ./square0 \
-  --w_solver $WS --ns_solver $NS --p_solver 0 --f_solver 0 \
+mpirun -np $NPROC ./$FILE \
+  --w_solver $WS --ns_solver $NS --p_solver 1 --f_solver 69 \
   --visc $V --ang $A --rey $R --noel $NOEL
 
 #mpirun -np $NPROC ./square0 \
@@ -52,7 +53,7 @@ fi
 
 cd $OOMPHBASE/src/ && make && make install && \
 cd $OOMPHBASE/user_drivers/lagrange_square/ && \
-make square0 && \
+make $FILE && \
 run_code
 
 

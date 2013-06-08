@@ -639,18 +639,18 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  prec_pt->set_label_pt(&SL::Label);
 
  // Build solve and preconditioner
-#ifdef OOMPH_HAS_TRILINOS
- TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
- trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
- Solver_pt = trilinos_solver_pt;
- SL::Using_trilinos_solver = true;
-#else
+//#ifdef OOMPH_HAS_TRILINOS
+// TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
+// trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
+// Solver_pt = trilinos_solver_pt;
+// SL::Using_trilinos_solver = true;
+//#else
  Solver_pt = new GMRES<CRDoubleMatrix>;
  // We use RHS preconditioning. Note that by default,
  // left hand preconditioning is used.
  static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
  SL::Using_trilinos_solver = false;
-#endif
+//#endif
 
  Solver_pt->tolerance() = 1.0e-6;
  this->newton_solver_tolerance() = 1.0e-6;
@@ -982,6 +982,9 @@ int main(int argc, char* argv[])
   {
     case 0:
       SL::F_str = "Fe";
+      break;
+    case 69:
+      SL::F_str = "Fa";
       break;
     case 11:
       SL::F_str = "Fh2dp";
