@@ -27,7 +27,7 @@ OOMPHBASE="/home/ray/oomphlib/clean_checkout"
 WS="0"
 NS="1"
 V="1"
-A="30"
+A="0"
 R="200"
 
 function run_code {

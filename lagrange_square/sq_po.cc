@@ -33,8 +33,9 @@
 // Oomph-lib includes
 #include "generic.h"
 #include "navier_stokes.h"
-//#include "raymon.h"
-#include "./rayheader.h"
+
+// My own header
+#include "./../rayheader.h"
 
 // The 2D mesh
 #include "meshes/simple_rectangular_quadmesh.h"
