@@ -40,6 +40,7 @@
 // The 2D mesh
 #include "meshes/simple_rectangular_quadmesh.h"
 #include "meshes/rectangular_quadmesh.h"
+#include "meshes/backward_step_mesh.h"
 
 //using namespace std;
 using namespace oomph;
@@ -119,14 +120,17 @@ namespace oomph
 /// the same mesh rotated with an angle phi
 //========================================================================
  template<class ELEMENT>
- class SlopingQuadMesh : public RectangularQuadMesh<ELEMENT>
+ class SlopingQuadMesh : public BackwardStepQuadMesh<ELEMENT>
  {
  public:
 
   /// Constructor.
   SlopingQuadMesh(const unsigned& nx, const unsigned& ny,
-                  const double& lx,  const double& ly, const double& phi ) :
-   RectangularQuadMesh<ELEMENT>(nx,ny,lx,ly)
+                  const unsigned& nx_cut_out, const unsigned& ny_cut_out,
+                  const double& lx,  const double& ly, 
+                  const double& phi ) :
+   RectangularQuadMesh<ELEMENT>(nx,ny,lx,ly),
+   BackwardStepQuadMesh<ELEMENT>(nx,ny,nx_cut_out,ny_cut_out,lx,ly)
    {
     // Find out how many nodes there are
     unsigned n_node=this->nnode();
@@ -154,13 +158,13 @@ namespace oomph
 //======================================================================
 
 template<class ELEMENT>
-class TiltedCavityProblem : public Problem
+class BackwardStepProblem : public Problem
 {
 public:
 
  /// \short Constructor: Pass number of elements in x and y directions and
  /// lengths
- TiltedCavityProblem();
+ BackwardStepProblem();
 
  /// Update before solve is empty
  void actions_before_newton_solve()
@@ -265,7 +269,7 @@ private:
 /// Problem constructor
 //====================================================================
 template<class ELEMENT> // rrrback - changed here.
-TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
+BackwardStepProblem<ELEMENT>::BackwardStepProblem()
 {
  // Alias the namespace for convenience
  namespace SL = SquareLagrange;
@@ -273,25 +277,30 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  Doc_linear_solver_info_pt = SL::Doc_linear_solver_info_pt;
 
  // Assign the boundaries:
- unsigned if_b=3;
+ const unsigned if_b=3;
  //unsigned tf_b=1;
- unsigned po_b=1;
+ const unsigned po_b=5;
 
  /// Setup the mesh
- // # of elements in x-direction
- unsigned nx=SL::Noel;
-
- // # of elements in y-direction
- unsigned ny=SL::Noel;
-
+ 
  // Domain length in x-direction
- double lx=1.0;
+ const double lx=6.0;
 
  // Domain length in y-direction
- double ly=1.0;
+ const double ly=2.0;
+
+ // # of elements in x-direction
+ const unsigned nx=SL::Noel * lx;
+
+ // # of elements in y-direction
+ const unsigned ny=SL::Noel * ly;
+
+ // (number of elements to keep).
+ const unsigned nx_cut_out = 5 * SL::Noel;
+ const unsigned ny_cut_out = 1 * SL::Noel;
 
  Bulk_mesh_pt =
-  new SlopingQuadMesh<ELEMENT>(nx,ny,lx,ly,SL::Ang);
+  new SlopingQuadMesh<ELEMENT>(nx,ny,nx_cut_out,ny_cut_out,lx,ly,SL::Ang);
 
  // Create a "surface mesh" that will contain only
  // ImposeParallelOutflowElements in boundary 1
@@ -348,21 +357,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
    double ytiltedback = x*sin(-SL::Ang)
                         +y*cos(-SL::Ang);
    double u=0.0;
-   u=(ytiltedback-0.0)*(1-ytiltedback);
-
-
-   /*
-   if(ytiltedback > 0.5)
-    {
-     // Impose inflow velocity
-     u=(ytiltedback-0.5)*(1-ytiltedback);
-    }
-   else
-    {
-     // Impose outflow velocity
-     u=(ytiltedback-0.5)*ytiltedback;
-    }
-    // */
+   u=-4.0*(ytiltedback-1.0)*(2.0-ytiltedback);
 
    // Now apply the rotation to u, using rotation matrices.
    // with x = u and y = 0, i.e. R*[u;0] since we have the
@@ -665,14 +660,14 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 /// Doc the solution
 //========================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::doc_solution()
+void BackwardStepProblem<ELEMENT>::doc_solution()
 {
 
   namespace SL = SquareLagrange;
   
   std::ofstream some_file;
   std::stringstream filename;
-  filename << SL::Soln_dir<<"/"<<SL::Label;
+  filename << SL::Soln_dir<<"/"<<SL::Label<<".dat";
 
   // Number of plot points
   unsigned npts=5;
@@ -691,7 +686,7 @@ void TiltedCavityProblem<ELEMENT>::doc_solution()
 /// Mesh object pointeed to by surface_mesh_pt.
 //=======================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
+void BackwardStepProblem<ELEMENT>::
 create_parall_outflow_lagrange_elements(const unsigned &b,
                                         Mesh* const &bulk_mesh_pt,
                                         Mesh* const &surface_mesh_pt)
@@ -724,8 +719,8 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
     {
      Node* nod_pt = flux_element_pt->node_pt(j);
 
-     // Is the node also on boundary 0 or 2?
-     if ((nod_pt->is_on_boundary(0))||(nod_pt->is_on_boundary(2)))
+     // Is the node also on boundary 0 or 4?
+     if ((nod_pt->is_on_boundary(0))||(nod_pt->is_on_boundary(4)))
       {
        // How many nodal values were used by the "bulk" element
        // that originally created this node?
@@ -748,7 +743,7 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
 /// Mesh object pointeed to by surface_mesh_pt.
 //=======================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
+void BackwardStepProblem<ELEMENT>::
 create_impenetrable_lagrange_elements(const unsigned &b,
                                         Mesh* const &bulk_mesh_pt,
                                         Mesh* const &surface_mesh_pt)
@@ -836,6 +831,12 @@ int main(int argc, char* argv[])
  // Initialise MPI
  MPI_Helpers::init(argc,argv);
  #endif
+  // Get the global oomph-lib communicator 
+  const OomphCommunicator* const comm_pt = MPI_Helpers::communicator_pt();
+  
+  // my rank and number of processors. This is used later for putting the data.
+  unsigned my_rank = comm_pt->my_rank();
+  //unsigned nproc = comm_pt->nproc();
 
  // Alias the namespace for convenience.
  namespace SL = SquareLagrange;
@@ -896,7 +897,7 @@ int main(int argc, char* argv[])
  // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
  // straight describes the velocity flow field. Po = Parallel outflow
  // describes the boundary type.
- SL::Prob_str = "SqPo";
+ SL::Prob_str = "StepPo";
 
  // Set the strings to identify the preconditioning,
  // This is used purely for book keeping purposes.
@@ -1110,7 +1111,7 @@ int main(int argc, char* argv[])
  // Set Rey_str, used for book keeping.
  if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
  {
-   if(SL::Vis < 0)
+   if(SL::Rey < 0)
    {
      SL::Loop_reynolds = true;
    }
@@ -1122,114 +1123,137 @@ int main(int argc, char* argv[])
    }
  }
 
- TiltedCavityProblem< QTaylorHoodElement<2> > problem;
+ BackwardStepProblem< QTaylorHoodElement<2> > problem;
 
 
 ///////////////////////////////////////////////////////////////////////////////
 
  if(SL::Loop_reynolds)
  {
-//   double Rey_start = 0.0;
-//   double Rey_end = 300.0;
-//   for (SL::Rey = Rey_start; SL::Rey < Rey_end; SL::Rey += 100.0) 
-//   {
-//     std::ostringstream strs;
-//     strs << "R" << SL::Rey;
-//     SL::Rey_str = strs.str();
-//
-//     // Setup the label. Used for doc solution and preconditioner.
-//     if(SL::NS_solver == 0)
-//     {
-//       SL::Label = SL::Prob_str + SL::W_str + SL::NS_str + SL::Vis_str
-//         + SL::Ang_str + SL::Rey_str + SL::Noel_str
-//         + SL::W_approx_str + SL::Sigma_str;
-//     }
-//     else if(SL::NS_solver == 1)
-//     {
-//       SL::Label = SL::Prob_str
-//         + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-//         + SL::Vis_str + SL::Ang_str + SL::Rey_str
-//         + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
-//     }
-//     else
-//     {
-//       pause("There is no such NS preconditioner");
-//     }
-//
-//     time_t rawtime;
-//     time(&rawtime);
-//
-//     std::cout << "RAYDOING: "
-//       << SL::Label
-//       << " on " << ctime(&rawtime) << std::endl;
-//
-//
-//     // Solve the problem
-//     problem.newton_solve();
-//
-//     //Output solution
-//     if(SL::Doc_soln){problem.doc_solution();}
-//
-//     // We now output the iteration and time.
-//     Vector<Vector<std::pair<unsigned, double> > > iters_times
-//       = SL::Doc_linear_solver_info_pt->iterations_and_times();
-//
-//     // Below outputs the iteration counts and time.
-//     // Output the number of iterations
-//     // Since this is a steady state problem, there is only
-//     // one "time step".
-//     //*
-//
-//     // Loop over the time step:
-//     unsigned ntimestep = iters_times.size();
-//
-//     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
-//     {
-//       // New timestep:
-//       std::cout << "RAYITS:\t" << intimestep << "\t";
-//       // Loop through the Newtom Steps
-//       unsigned nnewtonstep = iters_times[intimestep].size();
-//       unsigned sum_of_newtonstep_iters = 0;
-//       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
-//           innewtonstep++)
-//       {
-//         sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep].first;
-//         std::cout << iters_times[intimestep][innewtonstep].first << " ";
-//       }
-//       double average_its = ((double)sum_of_newtonstep_iters)
-//         / ((double)nnewtonstep);
-//
-//       // Print to one decimal place if the average is not an exact
-//       // integer. Ohterwise we print normally.
-//       ((unsigned(average_its*10))%10)?
-//         std::cout << "\t"<< std::fixed << std::setprecision(1)
-//         << average_its << "(" << nnewtonstep << ")" << std::endl:
-//         std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
-//
-//     }
-//
-//     // Now doing the times
-//     for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
-//     {
-//       // New timestep:
-//       std::cout << "RAYTIME:\t" << intimestep << "\t";
-//       // Loop through the Newtom Steps
-//       unsigned nnewtonstep = iters_times[intimestep].size();
-//       double sum_of_newtonstep_times = 0;
-//       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
-//           innewtonstep++)
-//       {
-//         sum_of_newtonstep_times += iters_times[intimestep][innewtonstep].second;
-//         std::cout << iters_times[intimestep][innewtonstep].second << " ";
-//       }
-//       double average_time = ((double)sum_of_newtonstep_times)
-//         / ((double)nnewtonstep);
-//
-//       // Print to one decimal place if the average is not an exact
-//       // integer. Ohterwise we print normally.
-//       std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
-//     } // for timesteps
-//   }
+   double Rey_start = 0.0;
+   double Rey_end = 200.0;
+   unsigned rey_increment = 0; // used for output of iters/times
+   for (SL::Rey = Rey_start; SL::Rey <= Rey_end; SL::Rey += 50.0) 
+   {
+     std::ostringstream strs;
+     strs << "R" << SL::Rey;
+     SL::Rey_str = strs.str();
+
+     // Setup the label. Used for doc solution and preconditioner.
+     SL::Label = SL::Prob_str
+       + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
+       + SL::Vis_str + SL::Ang_str + SL::Rey_str
+       + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
+
+     time_t rawtime;
+     time(&rawtime);
+
+     std::cout << "RAYDOING: "
+       << SL::Label
+       << " on " << ctime(&rawtime) << std::endl;
+
+
+     // Solve the problem
+     problem.newton_solve();
+     
+     //Output solution
+     if(SL::Doc_soln){problem.doc_solution();}
+     
+     if(my_rank == 0)
+     {
+     // Output the iteration counts and times if my_rank = 0
+     // Create the File...
+     std::ostringstream filename_stream;
+     filename_stream << "runs"<<SL::Prob_str<<"/RAYOUT"<<SL::Label;
+     
+     std::ofstream outfile;
+     outfile.open(filename_stream.str().c_str());
+
+     // We now output the iteration and time.
+     Vector<Vector<Vector<double> > > iters_times
+       = SL::Doc_linear_solver_info_pt->iterations_and_times();
+
+     // Below outputs the iteration counts and time.
+     // Output the number of iterations
+     // Since this is a steady state problem, there is only
+     // one "time step".
+     //*
+     // Loop over the time steps and output the iterations, prec setup time and
+     // linear solver time.
+     //unsigned ntimestep = iters_times.size();
+     //for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+     {
+       // New timestep:
+       outfile << "RAYITS:\t" << rey_increment << "\t";
+     
+       // Loop through the Newtom Steps
+       unsigned nnewtonstep = iters_times[rey_increment].size();
+       unsigned sum_of_newtonstep_iters = 0;
+       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+           innewtonstep++)
+       {
+         sum_of_newtonstep_iters += iters_times[rey_increment][innewtonstep][0];
+         outfile << iters_times[rey_increment][innewtonstep][0] << " ";
+       }
+       double average_its = ((double)sum_of_newtonstep_iters)
+         / ((double)nnewtonstep);
+  
+       // Print to one decimal place if the average is not an exact
+       // integer. Otherwise we print normally.
+       std::streamsize cout_precision = outfile.precision();
+       ((unsigned(average_its*10))%10)?
+         outfile << "\t"<< std::fixed << std::setprecision(1)
+         << average_its << "(" << nnewtonstep << ")" << std::endl:
+         outfile << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+       outfile << std::setprecision(cout_precision);
+     }
+
+     // Now doing the preconditioner setup time.
+     //for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+     {
+       // New timestep:
+       outfile << "RAYPRECSETUP:\t" << rey_increment << "\t";
+       // Loop through the Newtom Steps
+       unsigned nnewtonstep = iters_times[rey_increment].size();
+       double sum_of_newtonstep_times = 0;
+       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+           innewtonstep++)
+       {
+         sum_of_newtonstep_times += iters_times[rey_increment][innewtonstep][1];
+         outfile << iters_times[rey_increment][innewtonstep][1] << " ";
+       }
+       double average_time = ((double)sum_of_newtonstep_times)
+         / ((double)nnewtonstep);
+  
+       // Print to one decimal place if the average is not an exact
+       // integer. Otherwise we print normally.
+       outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     }
+
+     // Now doing the linear solver time.
+     //for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+     {
+       // New timestep:
+       outfile << "RAYLINSOLVER:\t" << rey_increment << "\t";
+       // Loop through the Newtom Steps
+       unsigned nnewtonstep = iters_times[rey_increment].size();
+       double sum_of_newtonstep_times = 0;
+       for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+           innewtonstep++)
+       {
+         sum_of_newtonstep_times += iters_times[rey_increment][innewtonstep][2];
+         outfile << iters_times[rey_increment][innewtonstep][2] << " ";
+       }
+       double average_time = ((double)sum_of_newtonstep_times)
+         / ((double)nnewtonstep);
+
+       // Print to one decimal place if the average is not an exact
+       // integer. Otherwise we print normally.
+       outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     }
+     } // if rank == 0 output stuff
+     rey_increment++;
+   }
  }
  else
  {
