@@ -256,7 +256,7 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
   {
 
    // Has the boundary been done yet?
-   if (!done[b])
+   if ((!done[b]) && (b != 1) && (b != 2))
     {
       std::cout << "pinning boundary: " << b << std::endl; 
       
