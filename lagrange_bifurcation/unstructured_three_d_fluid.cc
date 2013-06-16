@@ -139,19 +139,28 @@ public:
  /// Return total number of fluid outflow traction boundaries
  unsigned nfluid_traction_boundary()
   {
-   return Inflow_boundary_id.size()+Outflow_boundary_id.size();
+   //return Inflow_boundary_id.size()+Outflow_boundary_id.size();
+   return Inflow_boundary_id.size();
   }
 
  //private:
 
  /// Create fluid traction elements at inflow
- void create_fluid_traction_elements();
+ void create_fluid_traction_elements(const unsigned &b,
+                                     Mesh* const &bulk_mesh_pt,
+                                     Mesh* const &surface_mesh_pt);
 
+ void create_parall_outflow_lagrange_elements(const unsigned &b,
+                                              Mesh* const &bulk_mesh_pt,
+                                              Mesh* const &surface_mesh_pt);
  /// Bulk fluid mesh
  TetgenMesh<ELEMENT>* Fluid_mesh_pt;
 
  /// Meshes of fluid traction elements that apply pressure at in/outflow
- Vector<Mesh*> Fluid_traction_mesh_pt;
+ Mesh* Outflow_surface_mesh_pt;
+ Mesh* Fluid_traction_mesh_pt;
+
+ Vector<double> Tangent_direction;
 
  /// \short IDs of fluid mesh boundaries along which inflow boundary conditions
  /// are applied
@@ -209,44 +218,34 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  
  // Map to indicate which boundary has been done
  std::map<unsigned,bool> done; 
-  
- // Loop over inflow/outflow boundaries to impose parallel flow
- //for (unsigned in_out=0;in_out<2;in_out++)
-  {
-   // only pin the x/y components of the inflow boundary.
-   unsigned in_out = 0;
-   // Loop over in/outflow boundaries
-   unsigned n=nfluid_inflow_traction_boundary();
-   //if (in_out==1) n=nfluid_outflow_traction_boundary();
-   //for (unsigned i=0;i<n;i++)
-    {
-     // Get boundary ID
-     unsigned b=0;
-//     if (in_out==0)
-//      {
-//       b=Inflow_boundary_id[i];
-//      }
-//     else
-//      {
-//       b=Outflow_boundary_id[i];
-//      }
-
-     // Number of nodes on that boundary
-     unsigned num_nod=Fluid_mesh_pt->nboundary_node(b);
-     for (unsigned inod=0;inod<num_nod;inod++)
-      {
-       // Get the node
-       Node* nod_pt=Fluid_mesh_pt->boundary_node_pt(b,inod);
-       
-       // Pin transverse velocities
-       nod_pt->pin(0);
-       nod_pt->pin(1);
-      }
-     // Done!
-     done[b]=true;
-    }
-  } // done in and outflow
  
+ {
+ // There is only one inflow boundary.
+ unsigned b=Inflow_boundary_id[0];
+
+ // Number of nodes on that boundary
+ unsigned num_nod=Fluid_mesh_pt->nboundary_node(b);
+ for (unsigned inod=0;inod<num_nod;inod++)
+  {
+   // Get the node
+   Node* nod_pt=Fluid_mesh_pt->boundary_node_pt(b,inod);
+  
+   // Pin transverse velocities
+   nod_pt->pin(0);
+   nod_pt->pin(1);
+  }
+ // Done!
+ done[b]=true;
+ }
+
+ // The nodes at the outflow boundary should be free.
+ // So we set these to "done".
+ unsigned n_outflow_b = nfluid_outflow_traction_boundary();
+ for (unsigned b = 0; b < n_outflow_b; b++) 
+  {
+   unsigned outflow_b = Outflow_boundary_id[b];
+   done[outflow_b] = true;
+  }
  
  
  // Loop over all fluid mesh boundaries and pin velocities
@@ -256,10 +255,8 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
   {
 
    // Has the boundary been done yet?
-   if ((!done[b]) && (b != 1) && (b != 2))
+   if (!done[b])
     {
-      std::cout << "pinning boundary: " << b << std::endl; 
-      
      unsigned num_nod=Fluid_mesh_pt->nboundary_node(b);
      for (unsigned inod=0;inod<num_nod;inod++)
       {
@@ -274,9 +271,6 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
     }
 
   } // done no slip elsewhere 
- pause("done!"); 
- 
- 
  
  // Complete the build of the fluid elements so they are fully functional
  //----------------------------------------------------------------------
@@ -297,16 +291,25 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  //-----------------------------------------------------------
  
  // Create the meshes
- unsigned n=nfluid_traction_boundary();
- Fluid_traction_mesh_pt.resize(n);
- for (unsigned i=0;i<n;i++)
-  {
-   Fluid_traction_mesh_pt[i]=new Mesh;
-  } 
- 
+ Fluid_traction_mesh_pt=new Mesh;
+ Outflow_surface_mesh_pt = new Mesh;
  // Populate them with elements
- create_fluid_traction_elements();
- 
+ create_fluid_traction_elements(Inflow_boundary_id[0],
+                                Fluid_mesh_pt,
+                                Fluid_traction_mesh_pt);
+
+ // Setup the tangent direction.
+ Tangent_direction.resize(3,0);
+ Tangent_direction[0] = 0;
+ Tangent_direction[1] = 1;
+ Tangent_direction[2] = 0;
+ create_parall_outflow_lagrange_elements(Outflow_boundary_id[0],
+                                         Fluid_mesh_pt,
+                                         Outflow_surface_mesh_pt);
+  create_parall_outflow_lagrange_elements(Outflow_boundary_id[1],
+                                         Fluid_mesh_pt,
+                                         Outflow_surface_mesh_pt);
+
  
  // Combine the lot
  //----------------
@@ -317,11 +320,8 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  add_sub_mesh(Fluid_mesh_pt);
  
  // The fluid traction meshes
- n=nfluid_traction_boundary();
- for (unsigned i=0;i<n;i++)
-  { 
-   add_sub_mesh(Fluid_traction_mesh_pt[i]);
-  }
+ add_sub_mesh(Fluid_traction_mesh_pt);
+ add_sub_mesh(Outflow_surface_mesh_pt);
  
  // Build global mesh
  build_global_mesh();
@@ -337,48 +337,23 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
 /// Create fluid traction elements 
 //=======================================================================
 template<class ELEMENT>
-void UnstructuredFluidProblem<ELEMENT>::create_fluid_traction_elements()
+void UnstructuredFluidProblem<ELEMENT>::create_fluid_traction_elements
+(const unsigned &b, Mesh* const &bulk_mesh_pt, Mesh* const &surface_mesh_pt)
 {
-
- // Counter for number of fluid traction meshes
- unsigned count=0;
-
- // Loop over inflow/outflow boundaries // hierher only in 
- // in = 0
- // out = 1
- for (unsigned in_out=0;in_out<2;in_out++)
-  {
-   // Loop over boundaries with fluid traction elements
-   unsigned n=nfluid_inflow_traction_boundary();
-   if (in_out==1) n=nfluid_outflow_traction_boundary();
-   for (unsigned i=0;i<n;i++)
+   // How many bulk elements are adjacent to boundary b?
+   unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
+   
+   // Loop over the bulk elements adjacent to boundary b
+   for(unsigned e=0;e<n_element;e++)
     {
-     // Get boundary ID
-     unsigned b=0;
-     if (in_out==0)
-      {
-       b=Inflow_boundary_id[i];
-      }
-     else
-      {
-       b=Outflow_boundary_id[i];
-      }
+     // Get pointer to the bulk element that is adjacent to boundary b
+     ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
+      Fluid_mesh_pt->boundary_element_pt(b,e));
      
-     // How many bulk elements are adjacent to boundary b?
-     unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
-     
-     // Loop over the bulk elements adjacent to boundary b
-     for(unsigned e=0;e<n_element;e++)
-      {
-       // Get pointer to the bulk element that is adjacent to boundary b
-       ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
-        Fluid_mesh_pt->boundary_element_pt(b,e));
-       
-       //What is the index of the face of the element e along boundary b
-       int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
+     //What is the index of the face of the element e along boundary b
+     int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
 
-       // Set the pointer to the prescribed traction function
-       if (in_out==0)
+     // Set the pointer to the prescribed traction function
         {      
          // Create new element 
          NavierStokesTractionElement<ELEMENT>* el_pt=
@@ -386,25 +361,52 @@ void UnstructuredFluidProblem<ELEMENT>::create_fluid_traction_elements()
                                                    face_index);
        
          // Add it to the mesh
-         Fluid_traction_mesh_pt[count]->add_element_pt(el_pt);
+         Fluid_traction_mesh_pt->add_element_pt(el_pt);
 
          el_pt->traction_fct_pt() = 
           &Global_Parameters::prescribed_inflow_traction;
         }
-       else
+      }
+ } // end of create_traction_elements
+
+//============start_of_fluid_traction_elements==============================
+/// Create fluid traction elements 
+//=======================================================================
+template<class ELEMENT>
+void UnstructuredFluidProblem<ELEMENT>::create_parall_outflow_lagrange_elements
+(const unsigned &b, Mesh* const &bulk_mesh_pt, Mesh* const &surface_mesh_pt)
+{
+   // How many bulk elements are adjacent to boundary b?
+   unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
+   
+   // Loop over the bulk elements adjacent to boundary b
+   for(unsigned e=0;e<n_element;e++)
+    {
+     // Get pointer to the bulk element that is adjacent to boundary b
+     ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
+      Fluid_mesh_pt->boundary_element_pt(b,e));
+     
+     //What is the index of the face of the element e along boundary b
+     int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
+
+     // Set the pointer to the prescribed traction function
         {
          // Build the corresponding impose_impenetrability_element
          ImposeParallelOutflowElement<ELEMENT>* flux_element_pt = new
          ImposeParallelOutflowElement<ELEMENT>(bulk_elem_pt,
                                                face_index);
-         Fluid_traction_mesh_pt[count]->add_element_pt(flux_element_pt);
+
+         flux_element_pt->set_tangent_direction(&Tangent_direction);
+         Outflow_surface_mesh_pt->add_element_pt(flux_element_pt);
 
          // Loop over the nodes
          unsigned nnod=flux_element_pt->nnode();
          for (unsigned j=0;j<nnod;j++)
           {
            Node* nod_pt = flux_element_pt->node_pt(j);
-
+           
+           // Determine which outflow boundary it is, left or right?
+           
            if (  (nod_pt->is_on_boundary(7))||(nod_pt->is_on_boundary(8))
                ||(nod_pt->is_on_boundary(9))||(nod_pt->is_on_boundary(10))
                ||(nod_pt->is_on_boundary(11))||(nod_pt->is_on_boundary(12))
@@ -422,16 +424,9 @@ void UnstructuredFluidProblem<ELEMENT>::create_fluid_traction_elements()
               }
             }
           }
-
         }
       }
-     // Bump up counter
-     count++;
-    }
-  }
- 
  } // end of create_traction_elements
-
 
 
 //========================================================================
