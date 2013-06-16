@@ -469,7 +469,7 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run(DocInfo& doc_info)
 
   double time_max = Global_Parameters::Period / 2.0;
   double time_min = 0;
-  unsigned ntsteps = 80;
+  unsigned ntsteps = 40;
   double dt = (time_max - time_min)/ntsteps;
 
   if(Global_Parameters::Impulsive_start_flag)
