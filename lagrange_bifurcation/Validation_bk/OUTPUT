@@ -1,0 +1,69 @@
+Validation -- only doing two steps
+Number of equations: 942
+Initial Maximum residuals 0.138869
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 0.23
+Time for SuperLUSolver solve [sec]       : 0.03
+
+Time for linear solver ( ndof = 942 ) [sec]: 0.26
+
+Newton Step 1: Maximum residuals 0.000158641
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 0.23
+Time for SuperLUSolver solve [sec]       : 0.03
+
+Time for linear solver ( ndof = 942 ) [sec]: 0.26
+
+Newton Step 2: Maximum residuals 2.18438e-09
+
+Total time for linear solver (ndof=942) [sec]: 0.52
+Total time for Newton solver (ndof=942) [sec]: 0.76
+Time outside linear solver        : 31.5789 %
+
+Initial Maximum residuals 0.000157389
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 0.23
+Time for SuperLUSolver solve [sec]       : 0.03
+
+Time for linear solver ( ndof = 942 ) [sec]: 0.26
+
+Newton Step 1: Maximum residuals 4.42516e-09
+
+Total time for linear solver (ndof=942) [sec]: 0.26
+Total time for Newton solver (ndof=942) [sec]: 0.42
+Time outside linear solver        : 38.0952 %
+
+Number of equations: 5379
+Initial Maximum residuals 0.0960763
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 2.52
+Time for SuperLUSolver solve [sec]       : 0.62
+
+Time for linear solver ( ndof = 5379 ) [sec]: 3.14
+
+Newton Step 1: Maximum residuals 0.000179767
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 2.53
+Time for SuperLUSolver solve [sec]       : 0.61
+
+Time for linear solver ( ndof = 5379 ) [sec]: 3.14
+
+Newton Step 2: Maximum residuals 5.11288e-09
+
+Total time for linear solver (ndof=5379) [sec]: 6.28
+Total time for Newton solver (ndof=5379) [sec]: 7.71
+Time outside linear solver        : 18.5473 %
+
+Initial Maximum residuals 0.000178593
+
+Time to set up CRDoubleMatrix Jacobian [sec]: 2.49
+Time for SuperLUSolver solve [sec]       : 0.62
+
+Time for linear solver ( ndof = 5379 ) [sec]: 3.11
+
+Newton Step 1: Maximum residuals 9.86213e-09
+
+Total time for linear solver (ndof=5379) [sec]: 3.11
+Total time for Newton solver (ndof=5379) [sec]: 4.05
+Time outside linear solver        : 23.2099 %
+

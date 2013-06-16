@@ -1,0 +1,18 @@
+ 
+3D unstructured Navier Stokes validation
+----------------------------------------
+ 
+Validation directory: 
+ 
+   /home/ray/oomphlib/clean_checkout/demo_drivers/navier_stokes/unstructured_three_d_fluid/Validation
+ 
+Taylor Hood
+
+   [OK] for fpdiff.py parameters: - max. rel. error =  0.1 %
+                                  - numerical zero  =  1e-14
+
+Crouzeix Raviart
+
+   [OK] for fpdiff.py parameters: - max. rel. error =  0.1 %
+                                  - numerical zero  =  1e-14
+
