@@ -35,12 +35,66 @@
 #include "constitutive.h"
 #include "navier_stokes.h"
 
+// My own header
+#include "./../rayheader.h"
+
 // Get the mesh
 #include "meshes/tetgen_mesh.h"
 
 using namespace std;
 using namespace oomph;
 
+namespace RayNamespace
+{
+  // CL - set directly from the commandline.
+  // To set from CL - a CL value is set, this is changed depending on that
+  // value.
+
+  // Set the defaults.
+  unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
+  unsigned NS_solver = 1; //CL, 0 = SuperLU, 1 - LSC
+  unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
+  unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
+  unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
+  double Rey = 100.0; //CL, Reynolds number
+  double Maxarea = 0.2; //CL, maximum area/vol of each elements.
+  double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
+                             // the default is the norm of the momentum block.
+
+  std::string Prob_str = "Bi"; //Set from CL, a unique identifier.
+  std::string W_str = "We"; //Set from CL, e - Exact(LU), no other solver.
+  std::string NS_str = "Nl"; //Set from CL, e - Exact, l - LSC
+  std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
+  std::string P_str = "Pe"; //Set from CL, e - Exact, a - AMG
+  std::string Vis_str = "Sim"; //Set from CL, Sim - Simple, Str = Stress Diver.
+  std::string Rey_str = "R100"; //Set from CL, Reynolds number
+  std::string Maxarea_str = "A0.2";
+  std::string Sigma_str = ""; //Set from CL, sigma being used. is norm, then is
+                              // null.
+  std::string W_approx_str=""; //Set from CL, use diagonal approximation for W
+                               // block?
+  bool Use_axnorm = true; //Set from CL, use norm for sigma?
+  bool Use_diagonal_w_block = true; // To set from CL
+  bool Loop_reynolds = false;
+  bool Doc_prec = false; // To set from CL
+  bool Doc_soln = false; // To set from CL
+  
+  std::string Label = ""; // To be set as the label for this problem. Contains
+                          // all the information for this run.
+  std::string Soln_dir = ""; // Where to put the solution.
+
+  // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
+  // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
+  // using OOMPH-LIB's GMRES even if we have Trilinos. This should be set in
+  // the problem constuctor as soon as we set the linear_solver_pt() for the
+  // problem.
+  bool Using_trilinos_solver = false;
+
+  // Object to store the linear solver iterations and times.
+  DocLinearSolverInfo* Doc_linear_solver_info_pt;
+
+  unsigned Soln_num = 0;
+}
 
 //////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////
@@ -52,10 +106,6 @@ using namespace oomph;
 //================================================================
 namespace Global_Parameters
 {
-
- /// Default Reynolds number
- double Re=100.0;
-
  /// Magnitude of fluid pressure on inflow boundary
  double P_in=1.0;
 // double P_in=0.5;
@@ -73,11 +123,11 @@ namespace Global_Parameters
   traction[0]=0.0;
   traction[1]=0.0;
   traction[2]=P_in*(1.0 - cos((2.0*MathematicalConstants::Pi*t)/Period));
- // traction[2]=P_in;
+  // traction[2]=P_in;
  } 
 
 
-  /// Fluid pressure on outflow boundary
+ /// Fluid pressure on outflow boundary
 //  double P_out=-0.5; 
 
 //  /// Applied traction on fluid at the inflow boundary
@@ -118,11 +168,73 @@ public:
  /// Destructor (empty)
  ~UnstructuredFluidProblem(){}
 
+ /// Update before solve is empty
+ void actions_before_newton_solve()
+ {
+   namespace RNS = RayNamespace;
+   // Initialise counters for each newton solve.
+   RNS::Doc_linear_solver_info_pt->setup_new_time_step();
+ }
+
+ void actions_after_newton_step()
+ {
+   namespace RNS = RayNamespace;
+
+   unsigned iters = 0;
+   double preconditioner_setup_time = 0.0;
+   double solver_time = 0.0;
+
+   // Get the iteration counts.
+#ifdef PARANOID
+   IterativeLinearSolver* iterative_solver_pt
+     = dynamic_cast<IterativeLinearSolver*>
+       (this->linear_solver_pt());
+   if(iterative_solver_pt == 0)
+   {
+     std::ostringstream error_message;
+     error_message << "Cannot cast the solver pointer." << std::endl;
+
+     throw OomphLibError(error_message.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+   else
+   {
+     iters = iterative_solver_pt->iterations();
+     preconditioner_setup_time 
+       = iterative_solver_pt->preconditioner_pt()->setup_time();
+   }
+#else
+   iters = static_cast<IterativeLinearSolver*>
+             (this->linear_solver_pt())->iterations();
+   preconditioner_setup_time = static_cast<IterativeLinearSolver*>
+             (this->linear_solver_pt())->preconditioner_pt()->setup_time();
+
+#endif
+
+   // Get the preconditioner setup time.
+
+   // Set the solver time.
+   if(RNS::Using_trilinos_solver)
+   {
+     TrilinosAztecOOSolver* trilinos_solver_pt 
+       = dynamic_cast<TrilinosAztecOOSolver*>(this->linear_solver_pt());
+     solver_time = trilinos_solver_pt->linear_solver_solution_time();
+   }
+   else
+   {
+     solver_time = linear_solver_pt()->linear_solver_solution_time();
+   }
+
+   RNS::Doc_linear_solver_info_pt->add_iteration_and_time
+     (iters,preconditioner_setup_time,solver_time);
+ }
+
  /// Doc the solution
- void doc_solution(DocInfo& doc_info);
+ void doc_solution();
 
  /// Run an unsteady simulation
- void unsteady_run(DocInfo& doc_info); 
+ void unsteady_run(); 
  
  /// Return total number of fluid inflow traction boundaries
  unsigned nfluid_inflow_traction_boundary()
@@ -173,6 +285,13 @@ public:
  /// Trace file
  ofstream Trace_file;
 
+ // Preconditioner
+ Preconditioner* Prec_pt;
+ // Solver
+ IterativeLinearSolver* Solver_pt;
+
+ DocLinearSolverInfo* Doc_linear_solver_info_pt;
+
 };
 
 
@@ -183,6 +302,9 @@ public:
 template<class ELEMENT>
 UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
 {  
+ // Alias namespace for convenience
+ namespace RNS = RayNamespace;
+
  // RAYRAY
  // Allocate the timestepper
  add_time_stepper_pt(new BDF<2>);
@@ -220,22 +342,22 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  std::map<unsigned,bool> done; 
  
  {
- // There is only one inflow boundary.
- unsigned b=Inflow_boundary_id[0];
+  // There is only one inflow boundary.
+  unsigned b=Inflow_boundary_id[0];
 
- // Number of nodes on that boundary
- unsigned num_nod=Fluid_mesh_pt->nboundary_node(b);
- for (unsigned inod=0;inod<num_nod;inod++)
-  {
-   // Get the node
-   Node* nod_pt=Fluid_mesh_pt->boundary_node_pt(b,inod);
+  // Number of nodes on that boundary
+  unsigned num_nod=Fluid_mesh_pt->nboundary_node(b);
+  for (unsigned inod=0;inod<num_nod;inod++)
+   {
+    // Get the node
+    Node* nod_pt=Fluid_mesh_pt->boundary_node_pt(b,inod);
   
-   // Pin transverse velocities
-   nod_pt->pin(0);
-   nod_pt->pin(1);
-  }
- // Done!
- done[b]=true;
+    // Pin transverse velocities
+    nod_pt->pin(0);
+    nod_pt->pin(1);
+   }
+  // Done!
+  done[b]=true;
  }
 
  // The nodes at the outflow boundary should be free.
@@ -282,7 +404,7 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Fluid_mesh_pt->element_pt(e));
    
    //Set the Reynolds number
-   el_pt->re_pt() = &Global_Parameters::Re;   
+   el_pt->re_pt() = &RNS::Rey;   
 
   } 
  
@@ -306,7 +428,7 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  create_parall_outflow_lagrange_elements(Outflow_boundary_id[0],
                                          Fluid_mesh_pt,
                                          Outflow_surface_mesh_pt);
-  create_parall_outflow_lagrange_elements(Outflow_boundary_id[1],
+ create_parall_outflow_lagrange_elements(Outflow_boundary_id[1],
                                          Fluid_mesh_pt,
                                          Outflow_surface_mesh_pt);
 
@@ -328,7 +450,264 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
 
  // Setup equation numbering scheme
  std::cout <<"Number of equations: " << assign_eqn_numbers() << std::endl; 
+
+ ///////////////////////////////////////////////////////////
+ ////// Build the preconditioner
+ LagrangeEnforcedflowPreconditioner* prec_pt
+   = new LagrangeEnforcedflowPreconditioner;
  
+ Prec_pt = prec_pt;
+
+ Vector<Mesh*> mesh_pt;
+ mesh_pt.resize(2);
+ mesh_pt[0] = Fluid_mesh_pt;
+ mesh_pt[1] = Outflow_surface_mesh_pt;
+ prec_pt->set_meshes(mesh_pt);
+
+ if(!RNS::Use_axnorm)
+ {
+   prec_pt->scaling_sigma() = RNS::Scaling_sigma;
+ }
+
+ // W solver. Use SuperLU
+ if(RNS::W_solver == 0)
+ {
+ }
+ else
+ {
+   std::cout << "Other W solvers not complemented yet. Using default SuperLU"
+             << std::endl;
+ }
+
+ // The preconditioner for the fluid block:
+ if(RNS::NS_solver == 0) // Exact solve.
+ {}
+ else if(RNS::NS_solver == 1) // LSC
+ {
+   NavierStokesSchurComplementPreconditioner* ns_preconditioner_pt =
+     new NavierStokesSchurComplementPreconditioner(this);
+
+   prec_pt->set_navier_stokes_lsc_preconditioner(ns_preconditioner_pt);
+   ns_preconditioner_pt->set_navier_stokes_mesh(Fluid_mesh_pt);
+
+   // F block solve
+   // Preconditioner for the F block:
+   Preconditioner* f_preconditioner_pt = 0;
+   // RNS::F_solver == 0 is default, so do nothing.
+   if(RNS::F_solver == 11)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_2D_poison_problem();
+#endif
+   }
+   else if(RNS::F_solver == 12)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_navier_stokes_momentum_block();
+#endif
+   }
+   else if(RNS::F_solver == 13)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPGSStrn075();
+#endif
+   }
+   else if(RNS::F_solver == 14)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSGSStrn075();
+#endif
+   }
+   else if(RNS::F_solver == 15)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPPilutStrn075();
+#endif
+   }
+   else if(RNS::F_solver == 16)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSPilutStrn075();
+#endif
+   }
+   else if(RNS::F_solver == 17)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_augmented_momentum_block();
+#endif
+   }
+   else if(RNS::F_solver == 81)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPGSStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 82)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPJStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 83)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPPilutStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 84)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSGSStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 85)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSJStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 86)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSPilutStrn0668();
+#endif
+   }
+   else if(RNS::F_solver == 2)
+   {
+//     f_preconditioner_pt = new RayBlockDiagonalPreconditioner<CRDoubleMatrix>;
+     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
+   }
+   else if(RNS::F_solver == 3)
+   {
+     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
+#ifdef OOMPH_HAS_HYPRE
+     dynamic_cast<BlockDiagonalPreconditioner<CRDoubleMatrix>* >
+       (f_preconditioner_pt)->set_subsidiary_preconditioner_function
+       (Hypre_Subsidiary_Preconditioner_Helper::set_hypre_for_2D_poison_problem);
+#endif
+   }
+   else if (RNS::F_solver == 69)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // AMG coarsening: Ruge-Stuben
+     RayParam::amg_coarsening = 1;
+     
+     // AMG smoother: Gauss-Seidel
+     RayParam::amg_smoother=0;
+     
+     // There is no damping with GS, otherwise we set the parameter:
+     // RayParam::amg_damping
+
+     // Different amg strength for simple/stress divergence for viscuous term.
+     if(RNS::Vis == 0)
+     {
+       // Simple form
+       RayParam::amg_strength = 0.25;
+     }
+     else
+     {
+       // Stress divergence form
+       RayParam::amg_strength = 0.75;
+     }
+     
+     // Setup the preconditioner.
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_using_2D_poisson_base();
+#endif
+   }
+
+   // Set the preconditioner in the LSC preconditioner.
+   ns_preconditioner_pt->set_f_preconditioner(f_preconditioner_pt);
+   
+   // P block solve
+   //RNS::P_solver == 0 is default, so do nothing.
+   if(RNS::P_solver == 1)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     Preconditioner* p_preconditioner_pt = new HyprePreconditioner;
+
+     HyprePreconditioner* hypre_preconditioner_pt =
+       static_cast<HyprePreconditioner*>(p_preconditioner_pt);
+
+     Hypre_default_settings::
+     set_defaults_for_3D_poisson_problem(hypre_preconditioner_pt);
+
+     ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
+#endif
+   }
+ } // if for using LSC as NS prec.
+ else
+ {
+   pause("There is no solver for NS.");
+ }
+
+ // Set the doc info for book keeping purposes.
+ prec_pt->set_doc_linear_solver_info_pt(RNS::Doc_linear_solver_info_pt);
+
+ if(RNS::Use_diagonal_w_block)
+ {
+   prec_pt->use_diagonal_w_block();
+ }
+ else
+ {
+   prec_pt->use_block_diagonal_w_block();
+ }
+
+ if(RNS::Doc_prec)
+ {
+   prec_pt->enable_doc_prec();
+ }
+
+ // Set the label, use to output information from the preconditioner, such
+ // as the block matrices and the rhs vector
+ prec_pt->set_label_pt(&RNS::Label);
+
+ // Build solve and preconditioner
+//#ifdef OOMPH_HAS_TRILINOS
+// TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
+// trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
+// Solver_pt = trilinos_solver_pt;
+// RNS::Using_trilinos_solver = true;
+//#else
+ Solver_pt = new GMRES<CRDoubleMatrix>;
+ // We use RHS preconditioning. Note that by default,
+ // left hand preconditioning is used.
+ static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
+ RNS::Using_trilinos_solver = false;
+//#endif
+
+ Solver_pt->tolerance() = 1.0e-6;
+ this->newton_solver_tolerance() = 1.0e-6;
+
+ // Set solver and preconditioner
+ Solver_pt->preconditioner_pt() = Prec_pt;
+ linear_solver_pt() = Solver_pt;
 } // end constructor
 
 
@@ -340,34 +719,34 @@ template<class ELEMENT>
 void UnstructuredFluidProblem<ELEMENT>::create_fluid_traction_elements
 (const unsigned &b, Mesh* const &bulk_mesh_pt, Mesh* const &surface_mesh_pt)
 {
-   // How many bulk elements are adjacent to boundary b?
-   unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
+ // How many bulk elements are adjacent to boundary b?
+ unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
    
-   // Loop over the bulk elements adjacent to boundary b
-   for(unsigned e=0;e<n_element;e++)
-    {
-     // Get pointer to the bulk element that is adjacent to boundary b
-     ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
-      Fluid_mesh_pt->boundary_element_pt(b,e));
+ // Loop over the bulk elements adjacent to boundary b
+ for(unsigned e=0;e<n_element;e++)
+  {
+   // Get pointer to the bulk element that is adjacent to boundary b
+   ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
+    Fluid_mesh_pt->boundary_element_pt(b,e));
      
-     //What is the index of the face of the element e along boundary b
-     int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
+   //What is the index of the face of the element e along boundary b
+   int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
 
-     // Set the pointer to the prescribed traction function
-        {      
-         // Create new element 
-         NavierStokesTractionElement<ELEMENT>* el_pt=
-          new NavierStokesTractionElement<ELEMENT>(bulk_elem_pt,
-                                                   face_index);
+   // Set the pointer to the prescribed traction function
+   {      
+    // Create new element 
+    NavierStokesTractionElement<ELEMENT>* el_pt=
+     new NavierStokesTractionElement<ELEMENT>(bulk_elem_pt,
+                                              face_index);
        
-         // Add it to the mesh
-         Fluid_traction_mesh_pt->add_element_pt(el_pt);
+    // Add it to the mesh
+    Fluid_traction_mesh_pt->add_element_pt(el_pt);
 
-         el_pt->traction_fct_pt() = 
-          &Global_Parameters::prescribed_inflow_traction;
-        }
-      }
- } // end of create_traction_elements
+    el_pt->traction_fct_pt() = 
+     &Global_Parameters::prescribed_inflow_traction;
+   }
+  }
+} // end of create_traction_elements
 
 //============start_of_fluid_traction_elements==============================
 /// Create fluid traction elements 
@@ -376,130 +755,135 @@ template<class ELEMENT>
 void UnstructuredFluidProblem<ELEMENT>::create_parall_outflow_lagrange_elements
 (const unsigned &b, Mesh* const &bulk_mesh_pt, Mesh* const &surface_mesh_pt)
 {
-   // How many bulk elements are adjacent to boundary b?
-   unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
+ // How many bulk elements are adjacent to boundary b?
+ unsigned n_element = Fluid_mesh_pt->nboundary_element(b);
    
-   // Loop over the bulk elements adjacent to boundary b
-   for(unsigned e=0;e<n_element;e++)
-    {
-     // Get pointer to the bulk element that is adjacent to boundary b
-     ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
-      Fluid_mesh_pt->boundary_element_pt(b,e));
+ // Loop over the bulk elements adjacent to boundary b
+ for(unsigned e=0;e<n_element;e++)
+  {
+   // Get pointer to the bulk element that is adjacent to boundary b
+   ELEMENT* bulk_elem_pt = dynamic_cast<ELEMENT*>(
+    Fluid_mesh_pt->boundary_element_pt(b,e));
      
-     //What is the index of the face of the element e along boundary b
-     int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
+   //What is the index of the face of the element e along boundary b
+   int face_index = Fluid_mesh_pt->face_index_at_boundary(b,e);
 
-     // Set the pointer to the prescribed traction function
-        {
-         // Build the corresponding impose_impenetrability_element
-         ImposeParallelOutflowElement<ELEMENT>* flux_element_pt = new
-         ImposeParallelOutflowElement<ELEMENT>(bulk_elem_pt,
-                                               face_index);
+   // Set the pointer to the prescribed traction function
+   {
+    // Build the corresponding impose_impenetrability_element
+    ImposeParallelOutflowElement<ELEMENT>* flux_element_pt = new
+     ImposeParallelOutflowElement<ELEMENT>(bulk_elem_pt,
+                                           face_index);
 
-         flux_element_pt->set_tangent_direction(&Tangent_direction);
-         Outflow_surface_mesh_pt->add_element_pt(flux_element_pt);
+    flux_element_pt->set_tangent_direction(&Tangent_direction);
+    Outflow_surface_mesh_pt->add_element_pt(flux_element_pt);
 
-         // Loop over the nodes
-         unsigned nnod=flux_element_pt->nnode();
-         for (unsigned j=0;j<nnod;j++)
-          {
-           Node* nod_pt = flux_element_pt->node_pt(j);
+    // Loop over the nodes
+    unsigned nnod=flux_element_pt->nnode();
+    for (unsigned j=0;j<nnod;j++)
+     {
+      Node* nod_pt = flux_element_pt->node_pt(j);
            
-           // Determine which outflow boundary it is, left or right?
+      // Determine which outflow boundary it is, left or right?
            
-           if (  (nod_pt->is_on_boundary(7))||(nod_pt->is_on_boundary(8))
-               ||(nod_pt->is_on_boundary(9))||(nod_pt->is_on_boundary(10))
-               ||(nod_pt->is_on_boundary(11))||(nod_pt->is_on_boundary(12))
-               ||(nod_pt->is_on_boundary(13))||(nod_pt->is_on_boundary(14)))
-            {
-             // How many nodal values were used by the "bulk" element
-             // that originally created this node?
-             unsigned n_bulk_value=flux_element_pt->nbulk_value(j);
+      if (  (nod_pt->is_on_boundary(7))||(nod_pt->is_on_boundary(8))
+            ||(nod_pt->is_on_boundary(9))||(nod_pt->is_on_boundary(10))
+            ||(nod_pt->is_on_boundary(11))||(nod_pt->is_on_boundary(12))
+            ||(nod_pt->is_on_boundary(13))||(nod_pt->is_on_boundary(14)))
+       {
+        // How many nodal values were used by the "bulk" element
+        // that originally created this node?
+        unsigned n_bulk_value=flux_element_pt->nbulk_value(j);
 
-             // The remaining ones are Lagrange multipliers and we pin them.
-             unsigned nval=nod_pt->nvalue();
-             for (unsigned j=n_bulk_value;j<nval;j++)
-              {
-               nod_pt->pin(j);
-              }
-            }
-          }
-        }
-      }
- } // end of create_traction_elements
+        // The remaining ones are Lagrange multipliers and we pin them.
+        unsigned nval=nod_pt->nvalue();
+        for (unsigned j=n_bulk_value;j<nval;j++)
+         {
+          nod_pt->pin(j);
+         }
+       }
+     }
+   }
+  }
+} // end of create_traction_elements
 
 
 //========================================================================
 /// Doc the solution
 //========================================================================
 template<class ELEMENT>
-void UnstructuredFluidProblem<ELEMENT>::doc_solution(DocInfo& doc_info)
+void UnstructuredFluidProblem<ELEMENT>::doc_solution()
 { 
+ namespace RNS = RayNamespace;
 
- ofstream some_file;
- char filename[100];
+ std::ofstream some_file;
+ std::stringstream filename;
+ filename << RNS::Soln_dir<<"/soln"<<RNS::Soln_num<<".dat";
 
  // Number of plot points
- unsigned npts;
- npts=5;
-  
+ unsigned npts = 5;
  
  // Output fluid solution
- sprintf(filename,"%s/fluid_soln%i.dat",doc_info.directory().c_str(),
-         doc_info.number());
- some_file.open(filename);
+ some_file.open(filename.str().c_str());
  Fluid_mesh_pt->output(some_file,npts);
  some_file.close();
-  
 }
 
 //========================================================================
 /// Unsteady run...
 //========================================================================
 template<class ELEMENT>
-void UnstructuredFluidProblem<ELEMENT>::unsteady_run(DocInfo& doc_info)
+void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
 {
-  // OPen trace file
-  std::stringstream filename;
-  filename << doc_info.directory() << "/trace.dat";
+ namespace RNS = RayNamespace;
 
-  Trace_file.open(filename.str().c_str());
+ // Open trace file
+ std::stringstream filename;
+ filename << RNS::Soln_dir << "/trace.dat";
 
-  Trace_file << "Hello!\n";
+ Trace_file.open(filename.str().c_str());
 
-  double time_max = Global_Parameters::Period / 2.0;
-  double time_min = 0;
-  unsigned ntsteps = 40;
-  double dt = (time_max - time_min)/ntsteps;
+ Trace_file << "Hello!\n";
 
-  if(Global_Parameters::Impulsive_start_flag)
-   {
-    assign_initial_values_impulsive(dt);
-    std::cout << "IC = impulsive start" << std::endl; 
-   }
+ double time_max = Global_Parameters::Period / 2.0;
+ double time_min = 0;
+ unsigned ntsteps = 40;
+ double dt = (time_max - time_min)/ntsteps;
 
-  // Doc initial condition
-  doc_solution(doc_info);
-
-  // increment counter
-  doc_info.number()++;
-
-  // Loop over timesteps
-  for (unsigned t = 0; t < ntsteps; t++) 
+ if(Global_Parameters::Impulsive_start_flag)
   {
-    std::cout << "TIMESTEP " << t << std::endl; 
+   assign_initial_values_impulsive(dt);
+   std::cout << "IC = impulsive start" << std::endl; 
+  }
+
+ // Doc initial condition
+ if(RNS::Doc_soln)
+ {
+   doc_solution();
+
+   // increment counter
+   RNS::Soln_num++;
+ }
+
+ // Loop over timesteps
+ for (unsigned t = 0; t < ntsteps; t++) 
+  {
+   std::cout << "TIMESTEP " << t << std::endl; 
     
-    // Take one fixed timestep
-    unsteady_newton_solve(dt);
+   // Take one fixed timestep
+   unsteady_newton_solve(dt);
 
-    // Output the time
-    std::cout << "Time is now " << time_pt()->time() << std::endl; 
+   // Output the time
+   std::cout << "Time is now " << time_pt()->time() << std::endl; 
+   
+   if(RNS::Doc_soln)
+   {
+   // Doc solution
+   doc_solution();
 
-    // Doc solution
-    doc_solution(doc_info);
-
-    // increment counter
-    doc_info.number()++;
+   // increment counter
+   RNS::Soln_num++;
+   }
   }
   
 }
@@ -511,89 +895,392 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run(DocInfo& doc_info)
 //========================================================================
 int main(int argc, char **argv)
 {
+#ifdef OOMPH_HAS_MPI
+ // Initialise MPI
+ MPI_Helpers::init(argc,argv);
+#endif
+
+ // Alias namespace for convenience
+ namespace RNS = RayNamespace;
+
+ // Set up doc info
+ DocLinearSolverInfo doc_linear_solver_info;
+ 
+ RNS::Doc_linear_solver_info_pt = &doc_linear_solver_info;
+
+ RNS::Soln_dir = "RESLT_TH";
+
  // Store command line arguments
  CommandLineArgs::setup(argc,argv);
-  
- // Label for output
- DocInfo doc_info;
  
- // Parameter study
-// double Re_increment=100.0;
-// unsigned nstep=4;
-// if (CommandLineArgs::Argc==2)
-//  {
-//   std::cout << "Validation -- only doing two steps" << std::endl;
-//   nstep=2;
-//  }
- 
- 
- //Taylor--Hood
+ // Flag to output the solution.
+ CommandLineArgs::specify_command_line_flag("--doc_soln");
+ // Flag to output the preconditioner, used for debugging.
+ CommandLineArgs::specify_command_line_flag("--doc_prec");
+
+ CommandLineArgs::specify_command_line_flag("--w_solver", &RNS::W_solver);
+ CommandLineArgs::specify_command_line_flag("--ns_solver", &RNS::NS_solver);
+ CommandLineArgs::specify_command_line_flag("--p_solver", &RNS::P_solver);
+ CommandLineArgs::specify_command_line_flag("--f_solver", &RNS::F_solver);
+ CommandLineArgs::specify_command_line_flag("--visc", &RNS::Vis);
+ CommandLineArgs::specify_command_line_flag("--maxarea", &RNS::Maxarea);
+ CommandLineArgs::specify_command_line_flag("--rey", &RNS::Rey);
+ CommandLineArgs::specify_command_line_flag("--sigma",
+                                            &RNS::Scaling_sigma);
+ CommandLineArgs::specify_command_line_flag("--bdw");
+
+ // These are deat with in rayheader.h
+ CommandLineArgs::specify_command_line_flag("--amg_str", &RayParam::amg_strength);
+ CommandLineArgs::specify_command_line_flag("--amg_damp", &RayParam::amg_damping);
+
+ // Parse the above flags.
+ CommandLineArgs::parse_and_assign();
+ CommandLineArgs::doc_specified_flags();
+
+ ////////////////////////////////////////////////////
+ // Now set up the flags/parameters for the problem//
+ ////////////////////////////////////////////////////
+
+ // Document the solution? Default is false.
+ if(CommandLineArgs::command_line_flag_has_been_set("--doc_soln"))
  {
-  // Output directory
-  doc_info.set_directory("RESLT_TH");
-  
-  //Set up the problem
-  UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
-
-  problem.unsteady_run(doc_info);
-  
-  //Output initial guess
-//  problem.doc_solution(doc_info);
-//  doc_info.number()++;
-
-
-  
-//  // Parameter study: Crank up the pressure drop along the vessel
-//  for (unsigned istep=0;istep<nstep;istep++)
-//   {
-//    // Solve the problem
-//    problem.newton_solve();
-//    
-//    //Output solution
-//    problem.doc_solution(doc_info);
-//    doc_info.number()++;
-//    
-//    // Bump up Reynolds number (equivalent to increasing the imposed pressure
-//    // drop)
-//    Global_Parameters::Re+=Re_increment;   
-//   }
+   RNS::Doc_soln = true;
  }
 
-// //Crouzeix Raviart
-// {
-//  //Reset to default Reynolds number
-//  Global_Parameters::Re = 100.0;
-//
-//  //Reset doc info number
-//  doc_info.number()=0;   
-//
-//  // Output directory
-//  doc_info.set_directory("RESLT_CR");
-//  
-//  //Set up the problem
-//  UnstructuredFluidProblem<TCrouzeixRaviartElement<3> > problem;
-//
-//  //Output initial guess
-//  problem.doc_solution(doc_info);
-//  doc_info.number()++;   
-//
-//
-//  // Parameter study: Crank up the pressure drop along the vessel
-//  for (unsigned istep=0;istep<nstep;istep++)
-//   {
-//    // Solve the problem
-//    problem.newton_solve();
-//    
-//    //Output solution
-//    problem.doc_solution(doc_info);
-//    doc_info.number()++;
-//    
-//    // Bump up Reynolds number (equivalent to increasing the imposed pressure
-//    // drop)
-//    Global_Parameters::Re+=Re_increment;   
-//   }
-// }
- 
+ // Document the preconditioner? Default is false.
+ if(CommandLineArgs::command_line_flag_has_been_set("--doc_prec"))
+ {
+   RNS::Doc_prec = true;
+ }
+
+ // Set a string to identify the problem. This is unique to each problem,
+ // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
+ // straight describes the velocity flow field. Po = Parallel outflow
+ // describes the boundary type.
+ RNS::Prob_str = "Bi";
+
+ // Default: W_solver = 0, W_str = We
+ if(CommandLineArgs::command_line_flag_has_been_set("--w_solver"))
+ {
+  switch(RNS::W_solver)
+  {
+    case 0:
+      RNS::W_str = "We";
+      break;
+    default:
+    {
+     std::ostringstream err_msg;
+     err_msg << "No such W solver coded: " << RNS::W_solver << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+    }
+  }  // switch
+ } // if
+
+ // Default: NS_solver = 1, NS_str = Nl
+ if(CommandLineArgs::command_line_flag_has_been_set("--ns_solver"))
+ {
+  switch(RNS::NS_solver)
+  {
+    case 0:
+      RNS::NS_str = "Ne";
+      RNS::P_str = "";
+      RNS::F_str = "";
+      break;
+    case 1:
+      RNS::NS_str = "Nl";
+      break;
+    default:
+     {
+      std::ostringstream err_msg;
+      err_msg << "No such NS solver coded: " << RNS::NS_solver << std::endl;
+
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+     }
+  }  // switch
+ } // if
+
+
+ // Default: This can only be set if NS_solver != 0 i.e. we are using LSC for 
+ // the NS block
+ // Default: P_solver = 0, P_str = Pe
+ if(CommandLineArgs::command_line_flag_has_been_set("--p_solver"))
+ {
+  if(RNS::NS_solver == 0)
+  {
+    std::ostringstream err_msg;
+    err_msg << "NS solver is exact. There cannot be a P solver." << std::endl;
+
+    throw OomphLibError(err_msg.str(),
+                        OOMPH_CURRENT_FUNCTION,
+                        OOMPH_EXCEPTION_LOCATION);
+  }
+
+  switch(RNS::P_solver)
+  {
+    case 0:
+      RNS::P_str = "Pe";
+      break;
+    case 1:
+      RNS::P_str = "Pa";
+      break;
+    default:
+     {
+      std::ostringstream err_msg;
+      err_msg  << "Do not recognise P: " << RNS::P_solver << "\n"
+                << "Exact preconditioning = 0\n"
+                << "AMG = 1"<< std::endl;
+
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+     }
+  }  // switch
+ } // if
+
+
+ // This can only be set if we're using LSC for the NS block.
+ // Default: 0, Fe
+ if(CommandLineArgs::command_line_flag_has_been_set("--f_solver"))
+ {
+  if(RNS::NS_solver == 0)
+  {
+    std::ostringstream err_msg;
+    err_msg << "NS solver is exact. There cannot be a F solver." << std::endl;
+
+    throw OomphLibError(err_msg.str(),
+                        OOMPH_CURRENT_FUNCTION,
+                        OOMPH_EXCEPTION_LOCATION);
+  }
+
+  switch(RNS::F_solver)
+  {
+    case 0:
+      RNS::F_str = "Fe";
+      break;
+    case 69:
+      RNS::F_str = "Fa";
+      break;
+    default:
+      {
+      std::ostringstream err_msg;
+      err_msg << "Do not recognise F: " << RNS::F_solver << "\n"
+              << "Exact preconditioning = 0\n"
+              << "AMG = xxx Look in the code..."<< std::endl;
+
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+      }
+  }  // switch
+ } // if
+
+
+ // Set the viscuous term.
+ // Default: 0, Sim
+ if(CommandLineArgs::command_line_flag_has_been_set("--visc"))
+ {
+   if (RNS::Vis == 0)
+   {
+     RNS::Vis_str = "Sim";
+     NavierStokesEquations<3>::Gamma[0]=0.0;
+     NavierStokesEquations<3>::Gamma[1]=0.0;
+     NavierStokesEquations<3>::Gamma[2]=0.0;
+
+   }
+   else if (RNS::Vis == 1)
+   {
+     RNS::Vis_str = "Str";
+     NavierStokesEquations<3>::Gamma[0]=1.0;
+     NavierStokesEquations<3>::Gamma[1]=1.0;
+     NavierStokesEquations<3>::Gamma[2]=1.0;
+   } // else - setting viscuous term.
+   else
+   {
+     std::ostringstream err_msg;
+     err_msg << "Do not recognise Viscuous term: " << RNS::Vis << "\n";
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+ }
+
+ if(CommandLineArgs::command_line_flag_has_been_set("--maxarea"))
+ {
+   std::ostringstream strs;
+   strs << "A" << RNS::Maxarea;
+   RNS::Maxarea_str = strs.str();
+ }
+
+ // Set Use_axnorm, if sigma has not been set, norm os momentum block is used.
+ if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
+ {
+   RNS::Use_axnorm = false;
+
+   std::ostringstream strs;
+   strs << "S" << RNS::Scaling_sigma;
+   RNS::Sigma_str = strs.str();
+ }
+
+ // use the diagonal or block diagonal approximation for W block.
+ if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
+ {
+   RNS::Use_diagonal_w_block = false;
+   RNS::W_approx_str = "bdw";
+ }
+ else
+ {
+   RNS::Use_diagonal_w_block = true;
+   RNS::W_approx_str = "";
+ }
+
+ // Set Rey_str, used for book keeping.
+ if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
+ {
+   if(RNS::Vis < 0)
+   {
+     RNS::Loop_reynolds = true;
+   }
+   else
+   {
+     std::ostringstream strs;
+     strs << "R" << RNS::Rey;
+     RNS::Rey_str = strs.str();
+   }
+ }
+
+/////////////////////////////////////////////// 
+ //Set up the problem
+ UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
+
+   // Setup the label. Used for doc solution and preconditioner.
+   RNS::Label = RNS::Prob_str
+               + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
+               + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
+               + RNS::W_approx_str + RNS::Sigma_str;
+
+   time_t rawtime;
+   time(&rawtime);
+
+   std::cout << "RAYDOING: "
+     << RNS::Label
+     << " on " << ctime(&rawtime) << std::endl;
+
+ problem.unsteady_run();
+
+   // We now output the iteration and time.
+   Vector<Vector<Vector<double> > > iters_times
+     = RNS::Doc_linear_solver_info_pt->iterations_and_times();
+
+   // Below outputs the iteration counts and time.
+   // Output the number of iterations
+   // Since this is a steady state problem, there is only
+   // one "time step".
+   //*
+   // Loop over the time steps and output the iterations, prec setup time and
+   // linear solver time.
+   unsigned ntimestep = iters_times.size();
+
+   unsigned sum_all_its = 0;
+   unsigned n_all_its = 0;
+   for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+   {
+     // New timestep:
+     std::cout << "RAYITS:\t" << intimestep << "\t";
+     
+     // Loop through the Newtom Steps
+     unsigned nnewtonstep = iters_times[intimestep].size();
+     unsigned sum_of_newtonstep_iters = 0;
+     for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+         innewtonstep++)
+     {
+       sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep][0];
+       sum_all_its += iters_times[intimestep][innewtonstep][0];
+       n_all_its++;
+       std::cout << iters_times[intimestep][innewtonstep][0] << " ";
+     }
+     double average_its = ((double)sum_of_newtonstep_iters)
+       / ((double)nnewtonstep);
+
+     // Print to one decimal place if the average is not an exact
+     // integer. Otherwise we print normally.
+     std::streamsize cout_precision = std::cout.precision();
+     ((unsigned(average_its*10))%10)?
+       std::cout << "\t"<< std::fixed << std::setprecision(1)
+       << average_its << "(" << nnewtonstep << ")" << std::endl:
+       std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << std::setprecision(cout_precision);
+   }
+
+   // Output average of all its
+   {
+     double average_its = ((double)sum_all_its) / ((double)n_all_its);
+     std::cout <<"RAYAVGITS:\t";
+     std::streamsize cout_precision = std::cout.precision();
+     ((unsigned(average_its*10))%10)?
+       std::cout << "\t"<< std::fixed << std::setprecision(1)
+       << average_its << std::endl:
+       std::cout << "\t"<< average_its << std::endl;
+     std::cout << std::setprecision(cout_precision);
+
+   }
+
+   // Now doing the preconditioner setup time.
+   for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+   {
+     // New timestep:
+     std::cout << "RAYPRECSETUP:\t" << intimestep << "\t";
+     // Loop through the Newtom Steps
+     unsigned nnewtonstep = iters_times[intimestep].size();
+     double sum_of_newtonstep_times = 0;
+     for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+         innewtonstep++)
+     {
+       sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][1];
+       std::cout << iters_times[intimestep][innewtonstep][1] << " ";
+     }
+     double average_time = ((double)sum_of_newtonstep_times)
+       / ((double)nnewtonstep);
+
+     // Print to one decimal place if the average is not an exact
+     // integer. Otherwise we print normally.
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+   }
+
+   // Now doing the linear solver time.
+   for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
+   {
+     // New timestep:
+     std::cout << "RAYLINSOLVER:\t" << intimestep << "\t";
+     // Loop through the Newtom Steps
+     unsigned nnewtonstep = iters_times[intimestep].size();
+     double sum_of_newtonstep_times = 0;
+     for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
+         innewtonstep++)
+     {
+       sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][2];
+       std::cout << iters_times[intimestep][innewtonstep][2] << " ";
+     }
+     double average_time = ((double)sum_of_newtonstep_times)
+       / ((double)nnewtonstep);
+
+     // Print to one decimal place if the average is not an exact
+     // integer. Otherwise we print normally.
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+   }
+
+
+
+#ifdef OOMPH_HAS_MPI
+// finalize MPI
+MPI_Helpers::finalize();
+#endif
+ return(EXIT_SUCCESS); 
 } // end_of_main
 
 
