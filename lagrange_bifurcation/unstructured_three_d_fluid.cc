@@ -317,8 +317,8 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  Fluid_mesh_pt =  new TetgenMesh<ELEMENT>(node_file_name,
                                           element_file_name,
                                           face_file_name,
-                                          time_stepper_pt(), // RAYRAY
-                                          split_corner_elements);
+                                          split_corner_elements, // RAYRAY
+                                          time_stepper_pt());
  
  // Find elements next to boundaries
  //Fluid_mesh_pt->setup_boundary_element_info();
