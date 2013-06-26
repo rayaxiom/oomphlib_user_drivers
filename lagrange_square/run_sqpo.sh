@@ -1,11 +1,14 @@
 #!/bin/bash
 
+
+
 NPROC=$1
 NOEL=$2
 FILE="sq_po"
 
 RAYMACHINE=$HOSTNAME # wulfling.maths.manchester.ac.uk, rice, cake...
-OOMPHBASE="/home/ray/oomphlib/clean_checkout"
+OOMPHBASE=$(make -s --no-print-directory print-top_builddir)
+CURRENTDIR=`pwd`
 
 # Flags:
 # --doc_soln - if present, doc the solution.
@@ -30,6 +33,10 @@ V="1"
 A="0"
 R="200"
 
+ITSTIMEDIR="res_ray"
+
+rm -rf $ITSTIMEDIR && mkdir $ITSTIMEDIR
+
 function run_code {
 if [ "$NPROC" = "0" ]; then
 ./$FILE --w_solver $WS --ns_solver $NS --visc $V \
@@ -37,7 +44,7 @@ if [ "$NPROC" = "0" ]; then
 else
 mpirun -np $NPROC ./$FILE \
   --w_solver $WS --ns_solver $NS --p_solver 1 --f_solver 69 \
-  --visc $V --ang $A --rey $R --noel $NOEL
+  --visc $V --ang $A --rey $R --noel $NOEL --itstimedir $ITSTIMEDIR
 
 #mpirun -np $NPROC ./square0 \
 #  --w_solver $WS --ns_solver $NS --p_solver 1 --f_solver 69 \
@@ -52,7 +59,7 @@ fi
 }
 
 cd $OOMPHBASE/src/ && make && make install && \
-cd $OOMPHBASE/user_drivers/lagrange_square/ && \
+cd $CURRENTDIR && \
 make $FILE && \
 run_code
 
