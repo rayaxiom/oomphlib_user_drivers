@@ -75,6 +75,9 @@ namespace SquareLagrange
                           // all the information for this run.
   std::string Soln_dir = ""; // Where to put the solution.
 
+  std::string Itstime_dir = ""; //Set from CL, directory to output the 
+                                // iteration counts and timing results.
+
   // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
   // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
   // using OOMPH-LIB's GMRES even if we have Trilinos. This should be set in
@@ -484,6 +487,9 @@ int main(int argc, char* argv[])
  CommandLineArgs::specify_command_line_flag("--rey", &SL::Rey);
  CommandLineArgs::specify_command_line_flag("--noel", &SL::Noel);
 
+ // Iteration count and times directory.
+ CommandLineArgs::specify_command_line_flag("--itstimedir", &SL::Itstime_dir);
+ 
  // These are dealt with in rayheader.h
  CommandLineArgs::specify_command_line_flag("--amg_str", &RayParam::amg_strength);
  CommandLineArgs::specify_command_line_flag("--amg_damp", &RayParam::amg_damping);
@@ -788,6 +794,22 @@ int main(int argc, char* argv[])
    //Output solution
    if(SL::Doc_soln){problem.doc_solution();}
 
+  // Get the global oomph-lib communicator 
+  const OomphCommunicator* const comm_pt = MPI_Helpers::communicator_pt();
+
+  // my rank and number of processors. This is used later for putting the data.
+  unsigned my_rank = comm_pt->my_rank();
+
+  if(CommandLineArgs::command_line_flag_has_been_set("--itstimedir")
+     && my_rank == 0)
+  {
+
+   // Create the File...
+   std::ostringstream filename_stream;
+   filename_stream << SL::Itstime_dir<<"/"<<SL::Label;
+   std::ofstream outfile;
+   outfile.open(filename_stream.str().c_str());
+   
    // We now output the iteration and time.
    Vector<Vector<Vector<double> > > iters_times
      = SL::Doc_linear_solver_info_pt->iterations_and_times();
@@ -804,7 +826,7 @@ int main(int argc, char* argv[])
    for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
    {
      // New timestep:
-     std::cout << "RAYITS:\t" << intimestep << "\t";
+     outfile << "RAYITS:\t" << intimestep << "\t";
      
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
@@ -813,26 +835,26 @@ int main(int argc, char* argv[])
          innewtonstep++)
      {
        sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep][0];
-       std::cout << iters_times[intimestep][innewtonstep][0] << " ";
+       outfile << iters_times[intimestep][innewtonstep][0] << " ";
      }
      double average_its = ((double)sum_of_newtonstep_iters)
        / ((double)nnewtonstep);
 
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
-     std::streamsize cout_precision = std::cout.precision();
+     std::streamsize cout_precision = outfile.precision();
      ((unsigned(average_its*10))%10)?
-       std::cout << "\t"<< std::fixed << std::setprecision(1)
+       outfile << "\t"<< std::fixed << std::setprecision(1)
        << average_its << "(" << nnewtonstep << ")" << std::endl:
-       std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
-     std::cout << std::setprecision(cout_precision);
+       outfile << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+     outfile << std::setprecision(cout_precision);
    }
 
    // Now doing the preconditioner setup time.
    for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
    {
      // New timestep:
-     std::cout << "RAYPRECSETUP:\t" << intimestep << "\t";
+     outfile << "RAYPRECSETUP:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -840,21 +862,21 @@ int main(int argc, char* argv[])
          innewtonstep++)
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][1];
-       std::cout << iters_times[intimestep][innewtonstep][1] << " ";
+       outfile << iters_times[intimestep][innewtonstep][1] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
 
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
-     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
 
    // Now doing the linear solver time.
    for(unsigned intimestep = 0; intimestep < ntimestep; intimestep++)
    {
      // New timestep:
-     std::cout << "RAYLINSOLVER:\t" << intimestep << "\t";
+     outfile << "RAYLINSOLVER:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -862,16 +884,18 @@ int main(int argc, char* argv[])
          innewtonstep++)
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][2];
-       std::cout << iters_times[intimestep][innewtonstep][2] << " ";
+       outfile << iters_times[intimestep][innewtonstep][2] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
 
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
-     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
- }
+   outfile.close();
+  } // if my_rank == 0
+ } // Not loop reynolds
 
 
 #ifdef OOMPH_HAS_MPI
