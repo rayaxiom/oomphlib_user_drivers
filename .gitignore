@@ -52,9 +52,11 @@ RESLT
 ########################################
 lagrange_square/sq_po
 lagrange_square/sq_van
-lagrange_sqcurve/sq_curve
 lagrange_step/step_po
 lagrange_step/step_van
+lagrange_sqcurve/sqcurve_po
+lagrange_sqcurve/sqcurve_van
+
 
 old
 
