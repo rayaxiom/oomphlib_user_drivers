@@ -58,6 +58,9 @@ TESTLIST_FILE="$ITSTIMEDIR/$FILEBASE.testlist"
 TESTLISTFIN_FILE="$ITSTIMEDIR/$FILEBASE.testlistfin"
 TESTOUT_FILE="$ITSTIMEDIR/$FILEBASE.testoutput"
 
+# The output file for this script (if it exits)
+SHELLOUTPUT_FILE="${FILEBASE}.output"
+
 gen_tests()
 {
 #PRECLIST="0 1 2" # Doing either full exact or Exact Navier Stokes
@@ -141,18 +144,32 @@ run_tests()
   # Total number of tests
   NUMTESTS=$(wc $TESTLIST_FILE | awk '{print $1;}')
   echo "RAYRAY: initial test run, total tests: $NUMTESTS"
+  
+  # Check if SHELLOUTPUT_FILE contains previous runs.
+  LINESINSHELLOUT=$(grep "RAYRAY: initial" $SHELLOUTPUT_FILE | wc | awk '{print $1;}')
+
+  if [ -f $SHELLOUTPUT_FILE ]; then
+    if [ "$LINESINSHELLOUT" -ne "1" ]; then
+      echo "This is the first run but you have not removed the previous $SHELLOUTPUT_FILE file."
+      echo "Please delete both the file $SHELLOUTPUT_FILE and the directory $ITSTIMEDIR"
+      echo "Then re-run this script."
+      exit 1
+    fi
+  fi
+
 
   # Current test number.
   TESTNUM=1
   
   while read RUNCOMMAND; do
     echo "Test $TESTNUM/$NUMTESTS: \"$RUNCOMMAND\" on $(date)"
-#    set -e
-    bash -c "$RUNCOMMAND" </dev/null >> $TESTOUT_FILE || true
-    STAT=$?
-#    set +e
-    echo "STATUS$STAT: $RUNCOMMAND" >> $TESTLISTFIN_FILE
+    bash -c "$RUNCOMMAND" </dev/null >> $TESTOUT_FILE
+
+    # For some reason I have to echo to stdout, otherwise it will execute
+    # the rest of the loop, updating TESTLISTFIN_FILE even when I ctrl+c
+    echo ""
     TESTNUM=$[$TESTNUM+1]
+    echo "$RUNCOMMAND" >> $TESTLISTFIN_FILE
   done < $TESTLIST_FILE
 }
 
@@ -175,8 +192,12 @@ run_tests_con()
     else
       echo "Test $TESTNUM/$NUMTESTS: \"$RUNCOMMAND\" on $(date)"
       bash -c "$RUNCOMMAND" </dev/null >> $TESTOUT_FILE
-      echo "$RUNCOMMAND" >> $TESTLISTFIN_FILE
+
+      # For some reason I have to echo to stdout, otherwise it will execute
+      # the rest of the loop, updating TESTLISTFIN_FILE even when I ctrl+c
+      echo ""
       TESTNUM=$[$TESTNUM+1]
+      echo "$RUNCOMMAND" >> $TESTLISTFIN_FILE
     fi
   done < $TESTLIST_FILE
 }
