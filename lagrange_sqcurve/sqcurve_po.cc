@@ -56,7 +56,6 @@ namespace SquareLagrange
   unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
   unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
   unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
-  double Ang = 30.0; //CL, Angle in degrees
   double Rey = 100.0; //CL, Reynolds number
   unsigned Noel = 4; //CL, Number of elements in 1D
   double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
@@ -68,7 +67,6 @@ namespace SquareLagrange
   std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
   std::string P_str = "Pe"; //Set from CL, e - Exact, a - AMG
   std::string Vis_str = "Sim"; //Set from CL, Sim - Simple, Str = Stress Diver.
-  std::string Ang_str = "A30"; //Set from CL, angle of rotation about the z axis
   std::string Rey_str = "R100"; //Set from CL, Reynolds number
   std::string Noel_str = "N4"; //Set from CL, Number of elements in 1D
   std::string Sigma_str = ""; //Set from CL, sigma being used. is norm, then is
@@ -87,6 +85,14 @@ namespace SquareLagrange
 
   std::string Itstime_dir = ""; //Set from CL, directory to output the 
                                 // iteration counts and timing results.
+
+  // The lower and higher angles of the annulus.
+  double Phi_lo = 0.0;
+  double Phi_hi = 90.0;
+
+  // The lower and higher radius from the origin.
+  double R_lo = 1.0;
+  double R_hi = 3.0;
 
   // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
   // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
@@ -122,15 +128,21 @@ namespace oomph
 /// the same mesh rotated with an angle phi
 //========================================================================
  template<class ELEMENT>
- class SlopingQuadMesh : public RectangularQuadMesh<ELEMENT>
+ class PartialAnnulusMesh : public RectangularQuadMesh<ELEMENT>
  {
  public:
 
   /// Constructor.
-  SlopingQuadMesh(const unsigned& nx, const unsigned& ny,
-                  const double& lx,  const double& ly, const double& phi ) :
+  PartialAnnulusMesh(const unsigned& nx, const unsigned& ny,
+                  const double& lx,  const double& ly) :
    RectangularQuadMesh<ELEMENT>(nx,ny,lx,ly)
    {
+    // Alias the namespace for convenience.
+    namespace SL = SquareLagrange;
+
+    // For converting degrees to radians.
+    const double deg_to_rad_ratio = MathematicalConstants::Pi / 180.0;
+
     // Find out how many nodes there are
     unsigned n_node=this->nnode();
 
@@ -143,10 +155,18 @@ namespace oomph
       // Get the x/y coordinates
       double x=nod_pt->x(0);
       double y=nod_pt->x(1);
+      
+      // Map x to r
+      double r = SL::R_lo + (SL::R_hi - SL::R_lo) * x;
+
+      // Map y to the angle phi
+      double phi = (SL::Phi_lo + (SL::Phi_hi - SL::Phi_lo)*y) 
+                   * deg_to_rad_ratio;
+      
 
       // Set new nodal coordinates
-      nod_pt->x(0)=x*cos(phi)-y*sin(phi);
-      nod_pt->x(1)=x*sin(phi)+y*cos(phi);
+      nod_pt->x(0)=r * cos(phi);
+      nod_pt->x(1)=r * sin(phi);
      }
    }
  };
@@ -157,13 +177,13 @@ namespace oomph
 //======================================================================
 
 template<class ELEMENT>
-class TiltedCavityProblem : public Problem
+class PartialAnnulusProblem : public Problem
 {
 public:
 
  /// \short Constructor: Pass number of elements in x and y directions and
  /// lengths
- TiltedCavityProblem();
+ PartialAnnulusProblem();
 
  /// Update before solve is empty
  void actions_before_newton_solve()
@@ -248,7 +268,7 @@ public:
 private:
 
  /// Pointer to the "bulk" mesh
- SlopingQuadMesh<ELEMENT>* Bulk_mesh_pt;
+ PartialAnnulusMesh<ELEMENT>* Bulk_mesh_pt;
 
  /// Pointer to the "surface" mesh
  Mesh* Surface_mesh_T_pt;
@@ -268,7 +288,7 @@ private:
 /// Problem constructor
 //====================================================================
 template<class ELEMENT> // rrrback - changed here.
-TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
+PartialAnnulusProblem<ELEMENT>::PartialAnnulusProblem()
 {
  // Alias the namespace for convenience
  namespace SL = SquareLagrange;
@@ -276,7 +296,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  Doc_linear_solver_info_pt = SL::Doc_linear_solver_info_pt;
 
  // Assign the boundaries:
- unsigned if_b=3;
+ //unsigned if_b=3;
  //unsigned tf_b=1;
  unsigned po_b=1;
 
@@ -294,7 +314,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  double ly=1.0;
 
  Bulk_mesh_pt =
-  new SlopingQuadMesh<ELEMENT>(nx,ny,lx,ly,SL::Ang);
+  new PartialAnnulusMesh<ELEMENT>(nx,ny,lx,ly);
 
  // Create a "surface mesh" that will contain only
  // ImposeParallelOutflowElements in boundary 1
@@ -317,65 +337,96 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // Combine all submeshes into a single Mesh
  build_global_mesh();
 
- unsigned num_bound=Bulk_mesh_pt->nboundary();
-
+ // Now we assign the boudnary conditions.
+ // The boundary enumeration is:
+ //
+ //    .
+ //   |  .
+ // 2 |    .   1 
+ //   |      .   
+ //   .        .  
+ //    .        . 
+ // 3   .        . 
+ //      --------
+ //          0
+ // 
+ // b0: pin y, leave x free
+ // b1: Parallel Outflow
+ // b2: Pin x, leave y free.
+ // b3: uniform radial inflow.
+ 
  // Set the boundary conditions for this problem: All nodes are
  // free by default -- just pin the ones that have Dirichlet conditions
  // here.
- for(unsigned ibound=0;ibound<num_bound;ibound++)
+ 
+ // current boundary and number of nodes in said boundary.
+ unsigned ibound = -1;
+ unsigned num_nod = -1;
+
+
+ // bottom boundary: pin y, leave x free.
+ ibound = 0;
+ num_nod=Bulk_mesh_pt->nboundary_node(ibound);
+ for (unsigned inod=0;inod<num_nod;inod++)
  {
-   //if((ibound != po_b)&&(ibound != tf_b))
-   if(ibound != po_b)
-   {
-     unsigned num_nod=Bulk_mesh_pt->nboundary_node(ibound);
-     for (unsigned inod=0;inod<num_nod;inod++)
-     {
-       // Get node
-       Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
+   // Get node
+   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
+   
+   nod_pt->pin(0);
+   nod_pt->pin(1);
 
-       nod_pt->pin(0);
-       nod_pt->pin(1);
+   double x=nod_pt->x(0);
 
-     }
-   }
+   double u = 1.0/x;
+
+   nod_pt->set_value(0,u);
+   nod_pt->set_value(1,0);
  }
 
- unsigned num_nod= mesh_pt()->nboundary_node(if_b);
- for(unsigned inod=0;inod<num_nod;inod++)
+ // left boundary: pin x, leave y free.
+ ibound = 2;
+ num_nod=Bulk_mesh_pt->nboundary_node(ibound);
+ for (unsigned inod=0;inod<num_nod;inod++)
  {
-   Node* nod_pt=mesh_pt()->boundary_node_pt(if_b,inod);
-   double x=nod_pt->x(0);
+   // Get node
+   //Bulk_mesh_pt->boundary_node_pt(ibound,inod)->pin(0);
+
+   // Get node
+   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
+   
+   nod_pt->pin(0);
+   nod_pt->pin(1);
+
    double y=nod_pt->x(1);
 
-   // Tilt it back
-   double ytiltedback = x*sin(-SL::Ang)
-                        +y*cos(-SL::Ang);
-   double u=0.0;
-   u=(ytiltedback-0.0)*(1-ytiltedback);
+   double u = 1.0/y;
 
+   nod_pt->set_value(0,0);
+   nod_pt->set_value(1,u);
+ }
 
-   /*
-   if(ytiltedback > 0.5)
-    {
-     // Impose inflow velocity
-     u=(ytiltedback-0.5)*(1-ytiltedback);
-    }
-   else
-    {
-     // Impose outflow velocity
-     u=(ytiltedback-0.5)*ytiltedback;
-    }
-    // */
+ // Inflow boundary, pin both x and y, impose uniform radial inflow.
+ ibound = 3;
+ num_nod=Bulk_mesh_pt->nboundary_node(ibound);
+ for (unsigned inod=0;inod<num_nod;inod++)
+ {
+   // Get node
+   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
 
-   // Now apply the rotation to u, using rotation matrices.
-   // with x = u and y = 0, i.e. R*[u;0] since we have the
-   // velocity in the x direction only. There is no velocity
-   // in the y direction.
-   double ux=u*cos(SL::Ang);
-   double uy=u*sin(SL::Ang);
+   nod_pt->pin(0);
+   nod_pt->pin(1);
 
-   nod_pt->set_value(0,ux);
-   nod_pt->set_value(1,uy);
+   double x=nod_pt->x(0);
+   double y=nod_pt->x(1);
+   double phi = atan2(y,x);
+
+   double u = 1.0;
+
+//    double u=(phi-Global_Physical_Variables::Phi_min*pi/180.0)*
+//     (Global_Physical_Variables::Phi_max*pi/180.0 - phi);
+   
+   nod_pt->set_value(0,u*cos(phi));
+   nod_pt->set_value(1,u*sin(phi));
  }
 
  //Complete the problem setup to make the elements fully functional
@@ -668,14 +719,14 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 /// Doc the solution
 //========================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::doc_solution()
+void PartialAnnulusProblem<ELEMENT>::doc_solution()
 {
 
   namespace SL = SquareLagrange;
   
   std::ofstream some_file;
   std::stringstream filename;
-  filename << SL::Soln_dir<<"/"<<SL::Label;
+  filename << SL::Soln_dir<<"/"<<SL::Label<<".dat";
 
   // Number of plot points
   unsigned npts=5;
@@ -684,6 +735,22 @@ void TiltedCavityProblem<ELEMENT>::doc_solution()
   some_file.open(filename.str().c_str());
   Bulk_mesh_pt->output(some_file,npts);
   some_file.close();
+  
+//  // bottom boundary: pin y, leave x free.
+// unsigned ibound = 0;
+// unsigned num_nod=Bulk_mesh_pt->nboundary_node(ibound);
+// for (unsigned inod=0;inod<num_nod;inod++)
+// {
+//   // Get node
+//   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
+//
+//   double x = nod_pt->x(0);
+//   double y = nod_pt->x(1);
+//   double ux = nod_pt->value(0);
+//   double uy = nod_pt->value(1);
+//
+//   std::cout << "x: " << x << ", y: " << y << ", ux: " <<ux << ", uy: " << uy << std::endl; 
+// }
 }
 
 
@@ -694,7 +761,7 @@ void TiltedCavityProblem<ELEMENT>::doc_solution()
 /// Mesh object pointeed to by surface_mesh_pt.
 //=======================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
+void PartialAnnulusProblem<ELEMENT>::
 create_parall_outflow_lagrange_elements(const unsigned &b,
                                         Mesh* const &bulk_mesh_pt,
                                         Mesh* const &surface_mesh_pt)
@@ -751,7 +818,7 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
 /// Mesh object pointeed to by surface_mesh_pt.
 //=======================================================================
 template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
+void PartialAnnulusProblem<ELEMENT>::
 create_impenetrable_lagrange_elements(const unsigned &b,
                                         Mesh* const &bulk_mesh_pt,
                                         Mesh* const &surface_mesh_pt)
@@ -864,7 +931,6 @@ int main(int argc, char* argv[])
  CommandLineArgs::specify_command_line_flag("--p_solver", &SL::P_solver);
  CommandLineArgs::specify_command_line_flag("--f_solver", &SL::F_solver);
  CommandLineArgs::specify_command_line_flag("--visc", &SL::Vis);
- CommandLineArgs::specify_command_line_flag("--ang", &SL::Ang);
  CommandLineArgs::specify_command_line_flag("--rey", &SL::Rey);
  CommandLineArgs::specify_command_line_flag("--noel", &SL::Noel);
  CommandLineArgs::specify_command_line_flag("--sigma",
@@ -1071,18 +1137,6 @@ int main(int argc, char* argv[])
    }
  }
 
- // Set Ang_str
- // Default: A30
- if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
- {
-   std::ostringstream strs;
-   strs << "A" << SL::Ang;
-   SL::Ang_str = strs.str();
- }
-
- // Now we need to convert Ang into radians.
- SL::Ang = SL::Ang * (MathematicalConstants::Pi / 180.0);
-
  // Set Noel_str, used for book keeping.
  if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
  {
@@ -1129,7 +1183,7 @@ int main(int argc, char* argv[])
    }
  }
 
- TiltedCavityProblem< QTaylorHoodElement<2> > problem;
+ PartialAnnulusProblem< QTaylorHoodElement<2> > problem;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1148,14 +1202,14 @@ int main(int argc, char* argv[])
 //     if(SL::NS_solver == 0)
 //     {
 //       SL::Label = SL::Prob_str + SL::W_str + SL::NS_str + SL::Vis_str
-//         + SL::Ang_str + SL::Rey_str + SL::Noel_str
+//         + SL::Rey_str + SL::Noel_str
 //         + SL::W_approx_str + SL::Sigma_str;
 //     }
 //     else if(SL::NS_solver == 1)
 //     {
 //       SL::Label = SL::Prob_str
 //         + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-//         + SL::Vis_str + SL::Ang_str + SL::Rey_str
+//         + SL::Vis_str + SL::Rey_str
 //         + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
 //     }
 //     else
@@ -1243,7 +1297,7 @@ int main(int argc, char* argv[])
    // Setup the label. Used for doc solution and preconditioner.
    SL::Label = SL::Prob_str
                + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-               + SL::Vis_str + SL::Ang_str + SL::Rey_str
+               + SL::Vis_str + SL::Rey_str
                + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
 
    time_t rawtime;
@@ -1292,6 +1346,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYITS:\t" << intimestep << "\t";
+     std::cout << "RAYITS:\t" << intimestep << "\t";
      
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
@@ -1301,6 +1356,7 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep][0];
        outfile << iters_times[intimestep][innewtonstep][0] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][0] << " ";
      }
      double average_its = ((double)sum_of_newtonstep_iters)
        / ((double)nnewtonstep);
@@ -1308,11 +1364,19 @@ int main(int argc, char* argv[])
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
      std::streamsize cout_precision = outfile.precision();
+
      ((unsigned(average_its*10))%10)?
        outfile << "\t"<< std::fixed << std::setprecision(1)
        << average_its << "(" << nnewtonstep << ")" << std::endl:
        outfile << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
      outfile << std::setprecision(cout_precision);
+
+     ((unsigned(average_its*10))%10)?
+       std::cout << "\t"<< std::fixed << std::setprecision(1)
+       << average_its << "(" << nnewtonstep << ")" << std::endl:
+       std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << std::setprecision(cout_precision);
+
    }
 
    // Now doing the preconditioner setup time.

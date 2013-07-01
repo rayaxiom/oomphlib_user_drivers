@@ -28,10 +28,10 @@ CURRENTDIR=`pwd`
 
 
 WS="0"
-NS="1"
+NS="0"
 V="1"
 A="0"
-R="200"
+R="100"
 
 ITSTIMEDIR="res_ray"
 
@@ -43,18 +43,11 @@ if [ "$NPROC" = "0" ]; then
           --ang $A --rey $R --noel $NOEL
 else
 mpirun -np $NPROC ./$FILE \
-  --w_solver $WS --ns_solver $NS --p_solver 1 --f_solver 69 \
-  --visc $V --ang $A --rey $R --noel $NOEL --itstimedir $ITSTIMEDIR
-
-#mpirun -np $NPROC ./square0 \
+  --w_solver $WS --ns_solver $NS \
+  --visc $V --ang $A --rey $R --noel $NOEL --doc_soln
+#mpirun -np $NPROC ./$FILE \
 #  --w_solver $WS --ns_solver $NS --p_solver 1 --f_solver 69 \
-#  --visc $V --ang $A --rey $R --noel $NOEL
-#NS="1"
-#F="0"
-#P="0"
-#mpirun -np $NPROC ./square0 \
-#  --w_solver $WS --ns_solver $NS --f_solver $F --p_solver $P \
-#  --visc $V --ang $A --rey $R --noel $NOEL
+#  --visc $V --ang $A --rey $R --noel $NOEL --itstimedir $ITSTIMEDIR
 fi
 }
 

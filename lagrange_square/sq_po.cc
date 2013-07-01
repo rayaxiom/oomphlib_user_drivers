@@ -1292,6 +1292,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYITS:\t" << intimestep << "\t";
+     std::cout << "RAYITS:\t" << intimestep << "\t";
      
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
@@ -1301,18 +1302,25 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_iters += iters_times[intimestep][innewtonstep][0];
        outfile << iters_times[intimestep][innewtonstep][0] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][0] << " ";
      }
      double average_its = ((double)sum_of_newtonstep_iters)
        / ((double)nnewtonstep);
 
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
-     std::streamsize cout_precision = outfile.precision();
+     std::streamsize cout_precision = std::cout.precision();
      ((unsigned(average_its*10))%10)?
        outfile << "\t"<< std::fixed << std::setprecision(1)
        << average_its << "(" << nnewtonstep << ")" << std::endl:
        outfile << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
      outfile << std::setprecision(cout_precision);
+
+     ((unsigned(average_its*10))%10)?
+       std::cout << "\t"<< std::fixed << std::setprecision(1)
+       << average_its << "(" << nnewtonstep << ")" << std::endl:
+       std::cout << "\t"<< average_its << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << std::setprecision(cout_precision);
    }
 
    // Now doing the preconditioner setup time.
@@ -1320,6 +1328,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYPRECSETUP:\t" << intimestep << "\t";
+     std::cout << "RAYPRECSETUP:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -1328,6 +1337,7 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][1];
        outfile << iters_times[intimestep][innewtonstep][1] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][1] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
@@ -1335,6 +1345,7 @@ int main(int argc, char* argv[])
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
      outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
 
    // Now doing the linear solver time.
@@ -1342,6 +1353,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYLINSOLVER:\t" << intimestep << "\t";
+     std::cout << "RAYLINSOLVER:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -1350,6 +1362,7 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][2];
        outfile << iters_times[intimestep][innewtonstep][2] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][2] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
@@ -1357,6 +1370,7 @@ int main(int argc, char* argv[])
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
      outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
    outfile.close();
   } // if my_rank == 0
