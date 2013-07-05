@@ -1,17 +1,25 @@
 noinst_PROGRAMS= \
-sqcurve_po \
-sqcurve_van \
+sqcurve_po_dirichletall \
+sqcurve_po_dirichletside \
+sqcurve_po_neumannside \
 milan_quarter_annulus 
 
 #------------------------------------------------------------------------
-sqcurve_po_SOURCES = sqcurve_po.cc
+sqcurve_po_dirichletall_SOURCES = sqcurve_po_dirichletall.cc
 
-sqcurve_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+sqcurve_po_dirichletall_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 #------------------------------------------------------------------------
-sqcurve_van_SOURCES = sqcurve_van.cc
 
-sqcurve_van_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+sqcurve_po_dirichletside_SOURCES = sqcurve_po_dirichletside.cc
+
+sqcurve_po_dirichletside_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+#------------------------------------------------------------------------
+
+sqcurve_po_neumannside_SOURCES = sqcurve_po_neumannside.cc
+
+sqcurve_po_neumannside_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 #------------------------------------------------------------------------
 milan_quarter_annulus_SOURCES = milan_quarter_annulus.cc

@@ -369,18 +369,7 @@ PartialAnnulusProblem<ELEMENT>::PartialAnnulusProblem()
  num_nod=Bulk_mesh_pt->nboundary_node(ibound);
  for (unsigned inod=0;inod<num_nod;inod++)
  {
-   // Get node
-   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
-   
-   nod_pt->pin(0);
-   nod_pt->pin(1);
-
-   double x=nod_pt->x(0);
-
-   double u = 1.0/x;
-
-   nod_pt->set_value(0,u);
-   nod_pt->set_value(1,0);
+   Bulk_mesh_pt->boundary_node_pt(ibound,inod)->pin(1);
  }
 
  // left boundary: pin x, leave y free.
@@ -388,21 +377,7 @@ PartialAnnulusProblem<ELEMENT>::PartialAnnulusProblem()
  num_nod=Bulk_mesh_pt->nboundary_node(ibound);
  for (unsigned inod=0;inod<num_nod;inod++)
  {
-   // Get node
-   //Bulk_mesh_pt->boundary_node_pt(ibound,inod)->pin(0);
-
-   // Get node
-   Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(ibound,inod);
-   
-   nod_pt->pin(0);
-   nod_pt->pin(1);
-
-   double y=nod_pt->x(1);
-
-   double u = 1.0/y;
-
-   nod_pt->set_value(0,0);
-   nod_pt->set_value(1,u);
+   Bulk_mesh_pt->boundary_node_pt(ibound,inod)->pin(0);
  }
 
  // Inflow boundary, pin both x and y, impose uniform radial inflow.
@@ -1384,6 +1359,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYPRECSETUP:\t" << intimestep << "\t";
+     std::cout << "RAYPRECSETUP:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -1392,6 +1368,7 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][1];
        outfile << iters_times[intimestep][innewtonstep][1] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][1] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
@@ -1399,6 +1376,7 @@ int main(int argc, char* argv[])
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
      outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
 
    // Now doing the linear solver time.
@@ -1406,6 +1384,7 @@ int main(int argc, char* argv[])
    {
      // New timestep:
      outfile << "RAYLINSOLVER:\t" << intimestep << "\t";
+     std::cout << "RAYLINSOLVER:\t" << intimestep << "\t";
      // Loop through the Newtom Steps
      unsigned nnewtonstep = iters_times[intimestep].size();
      double sum_of_newtonstep_times = 0;
@@ -1414,6 +1393,7 @@ int main(int argc, char* argv[])
      {
        sum_of_newtonstep_times += iters_times[intimestep][innewtonstep][2];
        outfile << iters_times[intimestep][innewtonstep][2] << " ";
+       std::cout << iters_times[intimestep][innewtonstep][2] << " ";
      }
      double average_time = ((double)sum_of_newtonstep_times)
        / ((double)nnewtonstep);
@@ -1421,6 +1401,7 @@ int main(int argc, char* argv[])
      // Print to one decimal place if the average is not an exact
      // integer. Otherwise we print normally.
      outfile << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
+     std::cout << "\t"<< average_time << "(" << nnewtonstep << ")" << std::endl;
    }
    outfile.close();
   } // if my_rank == 0

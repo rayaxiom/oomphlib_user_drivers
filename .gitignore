@@ -52,11 +52,26 @@ RESLT
 ########################################
 lagrange_square/sq_po
 lagrange_square/sq_van
+lagrange_square/sq_tf_po
 lagrange_step/step_po
 lagrange_step/step_van
-lagrange_sqcurve/sqcurve_po
-lagrange_sqcurve/sqcurve_van
+lagrange_sqcurve/sqcurve_po_dirichletall
+lagrange_sqcurve/sqcurve_po_dirichletside
+lagrange_sqcurve/sqcurve_po_neumannside
 
+# Folders
+lagrange_sqcurve/res_loop_sqcurve_po_dirichletside/
+lagrange_sqcurve/res_loop_sqcurve_po_neumannside/
+lagrange_square/res_loop_sq_tf_po/
+lagrange_square/res_loop_sq_tf_po_free_po_lgr/
+lagrange_square/res_loop_sq_tf_po_pin_po_lgr/
+lagrange_square/ray_temp/
+
+#output files
+*.output
+lagrange_bifurcation/loop_ns1.dat
+lagrange_bifurcation/loop_amg.dat
+lagrange_bifurcation/junk.dat
 
 old
 

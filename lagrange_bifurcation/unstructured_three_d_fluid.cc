@@ -40,6 +40,7 @@
 
 // Get the mesh
 #include "meshes/tetgen_mesh.h"
+#include "meshes/brick_from_tet_mesh.h" // RAYRAY new brick mesh stuff
 
 using namespace std;
 using namespace oomph;
@@ -266,7 +267,8 @@ public:
                                               Mesh* const &bulk_mesh_pt,
                                               Mesh* const &surface_mesh_pt);
  /// Bulk fluid mesh
- TetgenMesh<ELEMENT>* Fluid_mesh_pt;
+ BrickFromTetMesh<ELEMENT>* Fluid_mesh_pt; // RAYRAY new brick mesh stuff
+ //TetgenMesh<ELEMENT>* Fluid_mesh_pt;
 
  /// Meshes of fluid traction elements that apply pressure at in/outflow
  Mesh* Outflow_surface_mesh_pt;
@@ -314,12 +316,21 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  string element_file_name="fsi_bifurcation_fluid.1.ele";
  string face_file_name="fsi_bifurcation_fluid.1.face";
  bool split_corner_elements=true;
- Fluid_mesh_pt =  new TetgenMesh<ELEMENT>(node_file_name,
-                                          element_file_name,
-                                          face_file_name,
-                                          split_corner_elements, // RAYRAY
-                                          time_stepper_pt());
- 
+
+ // RAYRAY new brick mesh stuff
+ Fluid_mesh_pt =  new BrickFromTetMesh<ELEMENT>(node_file_name,
+                                                element_file_name,
+                                                face_file_name,
+                                                split_corner_elements,
+                                                time_stepper_pt());
+
+//  Fluid_mesh_pt =  new TetgenMesh<ELEMENT>(node_file_name,
+//                                          element_file_name,
+//                                          face_file_name,
+//                                          split_corner_elements,
+//                                          time_stepper_pt()); // RAYRAY
+
+
  // Find elements next to boundaries
  //Fluid_mesh_pt->setup_boundary_element_info();
 
@@ -633,7 +644,7 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
      else
      {
        // Stress divergence form
-       RayParam::amg_strength = 0.75;
+       RayParam::amg_strength = 0.668;
      }
      
      // Setup the preconditioner.
@@ -908,7 +919,7 @@ int main(int argc, char **argv)
  
  RNS::Doc_linear_solver_info_pt = &doc_linear_solver_info;
 
- RNS::Soln_dir = "RESLT_TH";
+ RNS::Soln_dir = "RESLT";
 
  // Store command line arguments
  CommandLineArgs::setup(argc,argv);
@@ -1142,7 +1153,7 @@ int main(int argc, char **argv)
  // Set Rey_str, used for book keeping.
  if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
  {
-   if(RNS::Vis < 0)
+   if(RNS::Rey < 0)
    {
      RNS::Loop_reynolds = true;
    }
@@ -1156,7 +1167,9 @@ int main(int argc, char **argv)
 
 /////////////////////////////////////////////// 
  //Set up the problem
- UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
+ //UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
+ // RAYRAY new brick mesh stuff
+ UnstructuredFluidProblem<QTaylorHoodElement<3> > problem;
 
    // Setup the label. Used for doc solution and preconditioner.
    RNS::Label = RNS::Prob_str

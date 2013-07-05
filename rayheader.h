@@ -38,12 +38,15 @@
 //using namespace std;
 using namespace oomph;
 
-namespace RayParam
+namespace RayGlobalAMGParam
 {
   double amg_strength = -1.0;
   double amg_damping = -1.0;
-  unsigned amg_coarsening = -1;
-  unsigned amg_smoother = -1;
+  int amg_coarsening = -1;
+  int amg_smoother = -1;
+
+  int amg_iterations = -1;
+  int amg_smoother_iterations = -1;
 }
 
 #ifdef OOMPH_HAS_HYPRE
@@ -63,9 +66,9 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
     Hypre_default_settings::
       set_defaults_for_2D_poisson_problem(hypre_preconditioner_pt);
 
-    if(!(RayParam::amg_strength < 0))
+    if(!(RayGlobalAMGParam::amg_strength < 0))
     {
-      hypre_preconditioner_pt->amg_strength() = RayParam::amg_strength;
+      hypre_preconditioner_pt->amg_strength() = RayGlobalAMGParam::amg_strength;
       std::cout << "RAYAMGSTR: " << hypre_preconditioner_pt->amg_strength() << std::endl; 
     }
 
@@ -82,20 +85,163 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
     Hypre_default_settings::
       set_defaults_for_navier_stokes_momentum_block(hypre_preconditioner_pt);
 
-    if(!(RayParam::amg_strength < 0))
+    if(!(RayGlobalAMGParam::amg_strength < 0))
     {
-      hypre_preconditioner_pt->amg_strength() = RayParam::amg_strength;
+      hypre_preconditioner_pt->amg_strength() = RayGlobalAMGParam::amg_strength;
       std::cout << "RAYAMGSTR: " << hypre_preconditioner_pt->amg_strength() << std::endl; 
     }
 
-    if(!(RayParam::amg_damping < 0))
+    if(!(RayGlobalAMGParam::amg_damping < 0))
     {
-      hypre_preconditioner_pt->amg_damping() = RayParam::amg_damping;
+      hypre_preconditioner_pt->amg_damping() = RayGlobalAMGParam::amg_damping;
       std::cout << "RAYDAMP: " << hypre_preconditioner_pt->amg_damping() << std::endl;
     }
  
     return another_preconditioner_pt;
   } 
+  ///////////////////////////////////////////////
+  ///////////////////////////////////////////////
+  Preconditioner* set_hypre_ray()
+  {
+    // Everything can be set! But defaults are used...
+
+    // Create the preconditioner and cast it.
+    Preconditioner* another_preconditioner_pt =  
+      new HyprePreconditioner;
+    HyprePreconditioner* hypre_preconditioner_pt = 
+      static_cast<HyprePreconditioner*>(another_preconditioner_pt);
+
+   ////////// SETTING STUFF //////////
+
+   // AMG preconditioner
+   hypre_preconditioner_pt->hypre_method() = HyprePreconditioner::BoomerAMG;
+
+    // Set the amg_iterations.
+    if(RayGlobalAMGParam::amg_iterations == -1)
+     {
+       RayGlobalAMGParam::amg_iterations = 1;
+     }
+
+    hypre_preconditioner_pt
+      ->set_amg_iterations(RayGlobalAMGParam::amg_iterations);
+
+    // Set the number of amg smoother iterations.
+    if(RayGlobalAMGParam::amg_smoother_iterations == -1)
+     {
+       RayGlobalAMGParam::amg_smoother_iterations = 2;
+     }
+
+    hypre_preconditioner_pt
+      ->amg_smoother_iterations() = RayGlobalAMGParam::amg_iterations;
+
+    // Store this information.
+    std::stringstream cyclestream;
+    cyclestream << "its"<<RayGlobalAMGParam::amg_iterations
+                << "smits" << RayGlobalAMGParam::amg_smoother_iterations;
+    
+    string cycle_str = cyclestream.str();
+    string smoother_str = "";
+    string damping_str = "";
+    string coarsening_str = "";
+    string strength_str = "";
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// \short Simple smoothing methods used in BoomerAMG. Relaxation types
+    /// include:
+    ///  0 = Jacobi 
+    ///  1 = Gauss-Seidel, sequential
+    ///      (very slow in parallel!)
+    /// To use these methods set AMG_using_simple_smoothing to true
+    // Setting the smoother:
+    if(RayGlobalAMGParam::amg_smoother == 1)
+    {
+      smoother_str = "GS";
+      // Setting up Gauss-Seidel
+      hypre_preconditioner_pt->amg_using_simple_smoothing();
+      hypre_preconditioner_pt->amg_simple_smoother() = 1;
+    }
+    else if(RayGlobalAMGParam::amg_smoother == 0)
+    {
+      smoother_str = "J";
+      hypre_preconditioner_pt->amg_damping() = RayGlobalAMGParam::amg_damping;
+      
+      // Setting up Jacobi with damping.
+      hypre_preconditioner_pt->amg_using_simple_smoothing();
+      hypre_preconditioner_pt->amg_simple_smoother() = 0;
+      if(!(RayGlobalAMGParam::amg_damping < 0))
+      {
+        std::ostringstream strs;
+        strs << "Dmp" << hypre_preconditioner_pt->amg_damping();
+        damping_str = strs.str(); 
+      }
+      else
+      {
+        std::cout << "Please set your damping using --amg_damping" << std::endl; 
+        pause("Please do not continue."); 
+      }
+    }
+    else if(RayGlobalAMGParam::amg_smoother == 2)
+    {
+      smoother_str = "Pilut";
+      hypre_preconditioner_pt->amg_using_complex_smoothing();
+      hypre_preconditioner_pt->amg_complex_smoother() = 7;
+    }
+    else
+    {
+      std::cout << "You supplied smoother: " << RayGlobalAMGParam::amg_smoother << std::endl;
+      std::cout << "No such smoother. 0 is Jacobi, 1 is GS, 2 is Pilut" << std::endl;
+      std::cout << "Please set your smoother using --smoother" << std::endl;
+      pause("Please do not continue.");
+    }
+
+
+    // AMG coarsening strategy. Coarsening types include:
+    ///  0 = CLJP (parallel coarsening using independent sets)
+    ///  1 = classical RS with no boundary treatment (not recommended
+    ///      in parallel)
+    if(RayGlobalAMGParam::amg_coarsening == 0)
+    {
+      coarsening_str = "CLJP";
+      hypre_preconditioner_pt->amg_coarsening() = 0;
+    }
+    else if(RayGlobalAMGParam::amg_coarsening == 1)
+    {
+      coarsening_str = "RS";
+      hypre_preconditioner_pt->amg_coarsening() = 1;
+    }
+    else
+    {
+      std::cout << "There is no such coarsening: " << RayGlobalAMGParam::amg_coarsening << std::endl;
+      std::cout << "0 - CLJP, 1 - RS, use --amg_coarsening" << std::endl;
+      pause("Do not continue"); 
+      
+    }
+    
+    if(!(RayGlobalAMGParam::amg_strength < 0))
+    {
+      hypre_preconditioner_pt->amg_strength() = RayGlobalAMGParam::amg_strength;
+      std::ostringstream strs;
+      strs << "Strn" << hypre_preconditioner_pt->amg_strength();
+      strength_str = strs.str(); 
+    }
+    else
+    {
+      std::cout << "Please set the amg_strengh using --amg_strength" << std::endl;
+      pause("Do not continue");
+    }
+    
+    std::cout << "RAYHYPRE: " << cycle_str
+                              << coarsening_str 
+                              << smoother_str
+                              << damping_str
+                              << strength_str
+                              << std::endl;
+    
+    return another_preconditioner_pt;
+  }
+
+  ///////////////////////////////////////////////
+  ///////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   Preconditioner* set_hypre_using_2D_poisson_base()
   {
@@ -119,22 +265,22 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
     ///      (very slow in parallel!)
     /// To use these methods set AMG_using_simple_smoothing to true
     // Setting the smoother:
-    if(RayParam::amg_smoother == 0)
+    if(RayGlobalAMGParam::amg_smoother == 0)
     {
       smoother_str = "GS";
       // Setting up Gauss-Seidel
       hypre_preconditioner_pt->amg_using_simple_smoothing();
       hypre_preconditioner_pt->amg_simple_smoother() = 1;
     }
-    else if(RayParam::amg_smoother == 1)
+    else if(RayGlobalAMGParam::amg_smoother == 1)
     {
       smoother_str = "J";
-      hypre_preconditioner_pt->amg_damping() = RayParam::amg_damping;
+      hypre_preconditioner_pt->amg_damping() = RayGlobalAMGParam::amg_damping;
       
       // Setting up Jacobi with damping.
       hypre_preconditioner_pt->amg_using_simple_smoothing();
       hypre_preconditioner_pt->amg_simple_smoother() = 0;
-      if(!(RayParam::amg_damping < 0))
+      if(!(RayGlobalAMGParam::amg_damping < 0))
       {
         std::ostringstream strs;
         strs << "Dmp" << hypre_preconditioner_pt->amg_damping();
@@ -146,7 +292,7 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
         pause("Please do not continue."); 
       }
     }
-    else if(RayParam::amg_smoother == 2)
+    else if(RayGlobalAMGParam::amg_smoother == 2)
     {
       smoother_str = "Pilut";
       hypre_preconditioner_pt->amg_using_complex_smoothing();
@@ -154,7 +300,7 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
     }
     else
     {
-      std::cout << "You supplied smoother: " << RayParam::amg_smoother << std::endl;
+      std::cout << "You supplied smoother: " << RayGlobalAMGParam::amg_smoother << std::endl;
       std::cout << "No such smoother. 0 is GS, 1 is Jacobi, 2 is Pilut" << std::endl;
       std::cout << "Please set your smoother using --smoother" << std::endl;
       pause("Please do not continue.");
@@ -165,27 +311,27 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
     ///  0 = CLJP (parallel coarsening using independent sets)
     ///  1 = classical RS with no boundary treatment (not recommended
     ///      in parallel)
-    if(RayParam::amg_coarsening == 0)
+    if(RayGlobalAMGParam::amg_coarsening == 0)
     {
       coarsening_str = "CLJP";
       hypre_preconditioner_pt->amg_coarsening() = 0;
     }
-    else if(RayParam::amg_coarsening == 1)
+    else if(RayGlobalAMGParam::amg_coarsening == 1)
     {
       coarsening_str = "RS";
       hypre_preconditioner_pt->amg_coarsening() = 1;
     }
     else
     {
-      std::cout << "There is no such coarsening: " << RayParam::amg_coarsening << std::endl;
+      std::cout << "There is no such coarsening: " << RayGlobalAMGParam::amg_coarsening << std::endl;
       std::cout << "0 - CLJP, 1 - RS, use --amg_coarsening" << std::endl;
       pause("Do not continue"); 
       
     }
     
-    if(!(RayParam::amg_strength < 0))
+    if(!(RayGlobalAMGParam::amg_strength < 0))
     {
-      hypre_preconditioner_pt->amg_strength() = RayParam::amg_strength;
+      hypre_preconditioner_pt->amg_strength() = RayGlobalAMGParam::amg_strength;
       std::ostringstream strs;
       strs << "Strn" << hypre_preconditioner_pt->amg_strength();
       strength_str = strs.str(); 

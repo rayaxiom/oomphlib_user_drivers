@@ -1,11 +1,16 @@
 noinst_PROGRAMS= \
 sq_po \
+sq_tf_po \
 sq_van 
 
 #------------------------------------------------------------------------
 sq_po_SOURCES = sq_po.cc
 
 sq_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_tf_po_SOURCES = sq_tf_po.cc
+
+sq_tf_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 #------------------------------------------------------------------------
 sq_van_SOURCES = sq_van.cc
