@@ -76,13 +76,17 @@ namespace RayNamespace
                                // block?
   bool Use_axnorm = true; //Set from CL, use norm for sigma?
   bool Use_diagonal_w_block = true; // To set from CL
-  bool Loop_reynolds = false;
   bool Doc_prec = false; // To set from CL
   bool Doc_soln = false; // To set from CL
+  bool Print_hypre = true;
   
   std::string Label = ""; // To be set as the label for this problem. Contains
                           // all the information for this run.
   std::string Soln_dir = ""; // Where to put the solution.
+  std::string Doc_prec_dir = ""; // Where to put the solution.
+
+  std::string Itstime_dir = ""; //Set from CL, directory to output the 
+                                // iteration counts and timing results.
 
   // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
   // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
@@ -91,10 +95,28 @@ namespace RayNamespace
   // problem.
   bool Using_trilinos_solver = false;
 
+  double Rey_start = 0.0;
+  double Rey_incre = 50.0;
+  double Rey_end = 500.0;
+
   // Object to store the linear solver iterations and times.
   DocLinearSolverInfo* Doc_linear_solver_info_pt;
 
   unsigned Soln_num = 0;
+
+  double f_amg_strength = -1.0;
+  double f_amg_damping = -1.0;
+  int f_amg_coarsening = -1;
+  int f_amg_smoother = -1;
+  int f_amg_iterations = -1;
+  int f_amg_smoother_iterations = -1;
+  
+  double p_amg_strength = -1.0;
+  double p_amg_damping = -1.0;
+  int p_amg_coarsening = -1;
+  int p_amg_smoother = -1;
+  int p_amg_iterations = -1;
+  int p_amg_smoother_iterations = -1;
 }
 
 //////////////////////////////////////////////////////////////////
@@ -172,15 +194,12 @@ public:
  /// Update before solve is empty
  void actions_before_newton_solve()
  {
-   namespace RNS = RayNamespace;
    // Initialise counters for each newton solve.
-   RNS::Doc_linear_solver_info_pt->setup_new_time_step();
+   Doc_linear_solver_info_pt->setup_new_time_step();
  }
 
  void actions_after_newton_step()
  {
-   namespace RNS = RayNamespace;
-
    unsigned iters = 0;
    double preconditioner_setup_time = 0.0;
    double solver_time = 0.0;
@@ -216,7 +235,7 @@ public:
    // Get the preconditioner setup time.
 
    // Set the solver time.
-   if(RNS::Using_trilinos_solver)
+   if(RayNamespace::Using_trilinos_solver)
    {
      TrilinosAztecOOSolver* trilinos_solver_pt 
        = dynamic_cast<TrilinosAztecOOSolver*>(this->linear_solver_pt());
@@ -227,7 +246,7 @@ public:
      solver_time = linear_solver_pt()->linear_solver_solution_time();
    }
 
-   RNS::Doc_linear_solver_info_pt->add_iteration_and_time
+   Doc_linear_solver_info_pt->add_iteration_and_time
      (iters,preconditioner_setup_time,solver_time);
  }
 
@@ -253,7 +272,8 @@ public:
  unsigned nfluid_traction_boundary()
   {
    //return Inflow_boundary_id.size()+Outflow_boundary_id.size();
-   return Inflow_boundary_id.size();
+   //return Inflow_boundary_id.size();
+   return -1;
   }
 
  //private:
@@ -306,6 +326,8 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
 {  
  // Alias namespace for convenience
  namespace RNS = RayNamespace;
+
+ Doc_linear_solver_info_pt = RNS::Doc_linear_solver_info_pt;
 
  // RAYRAY
  // Allocate the timestepper
@@ -627,10 +649,10 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
    {
 #ifdef OOMPH_HAS_HYPRE
      // AMG coarsening: Ruge-Stuben
-     RayParam::amg_coarsening = 1;
+     RayGlobalAMGParam::amg_coarsening = 1;
      
      // AMG smoother: Gauss-Seidel
-     RayParam::amg_smoother=0;
+     RayGlobalAMGParam::amg_smoother=0;
      
      // There is no damping with GS, otherwise we set the parameter:
      // RayParam::amg_damping
@@ -639,17 +661,62 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
      if(RNS::Vis == 0)
      {
        // Simple form
-       RayParam::amg_strength = 0.25;
+       RayGlobalAMGParam::amg_strength = 0.25;
      }
      else
      {
        // Stress divergence form
-       RayParam::amg_strength = 0.668;
+       RayGlobalAMGParam::amg_strength = 0.668;
      }
      
      // Setup the preconditioner.
      f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
        set_hypre_using_2D_poisson_base();
+#endif
+   }
+   else if (RNS::F_solver == 96)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // AMG coarsening:
+     // Set: RayGlobalAMGParam::amg_coarsening = 
+     // 0 - CLJP
+     // 1 - RS
+     
+     // AMG smoother:
+     // Set: RayGlobalAMGParam::amg_smoother = 
+     // 0 - Jacobi (Need to set damping as well)
+     // 1 - Gauss-Seidel
+     // 2 - Pilut
+     
+     // There is no damping with GS, otherwise we set the parameter:
+     // RayGlobalAMGParam::amg_damping
+
+     RayGlobalAMGParam::amg_strength = RNS::f_amg_strength;
+     RayGlobalAMGParam::amg_damping = RNS::f_amg_damping;
+     RayGlobalAMGParam::amg_coarsening = RNS::f_amg_coarsening;
+     RayGlobalAMGParam::amg_smoother = RNS::f_amg_smoother;
+     RayGlobalAMGParam::amg_iterations = RNS::f_amg_iterations;
+     RayGlobalAMGParam::amg_smoother_iterations = RNS::f_amg_smoother_iterations;
+
+
+     // Different amg strength for simple/stress divergence for viscuous term.
+     if(RayGlobalAMGParam::amg_strength < 0.0)
+     {
+       if(RNS::Vis == 0)
+       {
+         // Simple form
+         RayGlobalAMGParam::amg_strength = 0.25;
+       }
+       else
+       {
+         // Stress divergence form
+         RayGlobalAMGParam::amg_strength = 0.668;
+       }
+     }
+     
+     // Setup the preconditioner.
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_ray(RNS::Print_hypre);
 #endif
    }
 
@@ -668,6 +735,30 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
 
      Hypre_default_settings::
      set_defaults_for_3D_poisson_problem(hypre_preconditioner_pt);
+
+     ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
+#endif
+   }
+   else if(RNS::P_solver == 96)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     Preconditioner* p_preconditioner_pt = 0;
+     
+//* 
+     RayGlobalAMGParam::amg_iterations = RNS::p_amg_iterations;
+     RayGlobalAMGParam::amg_smoother_iterations = RNS::p_amg_smoother_iterations;
+     RayGlobalAMGParam::amg_smoother = RNS::p_amg_smoother;
+     RayGlobalAMGParam::amg_strength = RNS::p_amg_strength;
+     //RayGlobalAMGParam::amg_damping = RNS::p_amg_damping;
+     RayGlobalAMGParam::amg_coarsening = RNS::p_amg_coarsening;
+
+//     std::cout << "p_amg_iterations:" << SL::p_amg_iterations << std::endl; 
+//     std::cout << "p_amg_smoother_iterations" << SL::p_amg_smoother_iterations << std::endl; 
+//     std::cout << "p_amg_strength" << SL::p_amg_strength << std::endl;
+//     std::cout << "p_amg_coarsening" << SL::p_amg_coarsening << std::endl; 
+// */
+
+     p_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::set_hypre_ray(RNS::Print_hypre);
 
      ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
 #endif
@@ -698,6 +789,7 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  // Set the label, use to output information from the preconditioner, such
  // as the block matrices and the rhs vector
  prec_pt->set_label_pt(&RNS::Label);
+ prec_pt->set_doc_prec_directory_pt(&RNS::Doc_prec_dir);
 
  // Build solve and preconditioner
 //#ifdef OOMPH_HAS_TRILINOS
@@ -720,8 +812,6 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  Solver_pt->preconditioner_pt() = Prec_pt;
  linear_solver_pt() = Solver_pt;
 } // end constructor
-
-
 
 //============start_of_fluid_traction_elements==============================
 /// Create fluid traction elements 
@@ -856,9 +946,14 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
 
  Trace_file << "Hello!\n";
 
- double time_max = Global_Parameters::Period / 2.0;
+ // Period is 1.0
+ double time_max = Global_Parameters::Period / 2.0; // time_max = 0.5
  double time_min = 0;
  unsigned ntsteps = 40;
+
+ time_max /=4;
+ time_min /=4;
+ ntsteps /=4;
  double dt = (time_max - time_min)/ntsteps;
 
  if(Global_Parameters::Impulsive_start_flag)
@@ -867,6 +962,10 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
    std::cout << "IC = impulsive start" << std::endl; 
   }
 
+ std::cout << "RNS::Doc_soln: " << RNS::Doc_soln << std::endl;
+ std::cout << "RNS::Soln_dir: " << RNS::Soln_dir << std::endl; 
+ 
+ 
  // Doc initial condition
  if(RNS::Doc_soln)
  {
@@ -921,13 +1020,17 @@ int main(int argc, char **argv)
 
  RNS::Soln_dir = "RESLT";
 
+ RNS::Doc_prec_dir = "rawdata";
+
  // Store command line arguments
  CommandLineArgs::setup(argc,argv);
  
+
  // Flag to output the solution.
- CommandLineArgs::specify_command_line_flag("--doc_soln");
+ CommandLineArgs::specify_command_line_flag("--doc_soln", &RNS::Soln_dir);
  // Flag to output the preconditioner, used for debugging.
- CommandLineArgs::specify_command_line_flag("--doc_prec");
+ CommandLineArgs::specify_command_line_flag("--doc_prec",
+                                            &RNS::Doc_prec_dir);
 
  CommandLineArgs::specify_command_line_flag("--w_solver", &RNS::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &RNS::NS_solver);
@@ -936,13 +1039,32 @@ int main(int argc, char **argv)
  CommandLineArgs::specify_command_line_flag("--visc", &RNS::Vis);
  CommandLineArgs::specify_command_line_flag("--maxarea", &RNS::Maxarea);
  CommandLineArgs::specify_command_line_flag("--rey", &RNS::Rey);
+ CommandLineArgs::specify_command_line_flag("--rey_start", &RNS::Rey_start);
+ CommandLineArgs::specify_command_line_flag("--rey_incre", &RNS::Rey_incre);
+ CommandLineArgs::specify_command_line_flag("--rey_end", &RNS::Rey_end);
  CommandLineArgs::specify_command_line_flag("--sigma",
                                             &RNS::Scaling_sigma);
  CommandLineArgs::specify_command_line_flag("--bdw");
 
- // These are deat with in rayheader.h
- CommandLineArgs::specify_command_line_flag("--amg_str", &RayParam::amg_strength);
- CommandLineArgs::specify_command_line_flag("--amg_damp", &RayParam::amg_damping);
+ // Iteration count and times directory.
+ CommandLineArgs::specify_command_line_flag("--itstimedir", &RNS::Itstime_dir);
+
+ // NS_F block AMG parameters
+ CommandLineArgs::specify_command_line_flag("--f_amg_str", &RNS::f_amg_strength);
+ CommandLineArgs::specify_command_line_flag("--f_amg_damp", &RNS::f_amg_damping);
+ CommandLineArgs::specify_command_line_flag("--f_amg_coarse", &RNS::f_amg_coarsening);
+ CommandLineArgs::specify_command_line_flag("--f_amg_smoo", &RNS::f_amg_smoother);
+ CommandLineArgs::specify_command_line_flag("--f_amg_iter", &RNS::f_amg_iterations);
+ CommandLineArgs::specify_command_line_flag("--f_amg_smiter", &RNS::f_amg_smoother_iterations);
+
+ // NS_P block AMG parameters
+ CommandLineArgs::specify_command_line_flag("--p_amg_str", &RNS::p_amg_strength);
+ CommandLineArgs::specify_command_line_flag("--p_amg_damp", &RNS::p_amg_damping);
+ CommandLineArgs::specify_command_line_flag("--p_amg_coarse", &RNS::p_amg_coarsening);
+ CommandLineArgs::specify_command_line_flag("--p_amg_smoo", &RNS::p_amg_smoother);
+ CommandLineArgs::specify_command_line_flag("--p_amg_iter", &RNS::p_amg_iterations);
+ CommandLineArgs::specify_command_line_flag("--p_amg_smiter", &RNS::p_amg_smoother_iterations);
+
 
  // Parse the above flags.
  CommandLineArgs::parse_and_assign();
@@ -964,11 +1086,15 @@ int main(int argc, char **argv)
    RNS::Doc_prec = true;
  }
 
+
  // Set a string to identify the problem. This is unique to each problem,
  // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
  // straight describes the velocity flow field. Po = Parallel outflow
  // describes the boundary type.
  RNS::Prob_str = "Bi";
+
+ // Set the strings to identify the preconditioning,
+ // This is used purely for book keeping purposes.
 
  // Default: W_solver = 0, W_str = We
  if(CommandLineArgs::command_line_flag_has_been_set("--w_solver"))
@@ -977,6 +1103,12 @@ int main(int argc, char **argv)
   {
     case 0:
       RNS::W_str = "We";
+      break;
+    case 1:
+    {
+      pause("No other W block solver coded."); 
+      RNS::W_str = "Wa";
+    }
       break;
     default:
     {
@@ -1015,7 +1147,6 @@ int main(int argc, char **argv)
   }  // switch
  } // if
 
-
  // Default: This can only be set if NS_solver != 0 i.e. we are using LSC for 
  // the NS block
  // Default: P_solver = 0, P_str = Pe
@@ -1038,6 +1169,9 @@ int main(int argc, char **argv)
       break;
     case 1:
       RNS::P_str = "Pa";
+      break;
+    case 96:
+      RNS::P_str = "Pray";
       break;
     default:
      {
@@ -1075,6 +1209,9 @@ int main(int argc, char **argv)
       break;
     case 69:
       RNS::F_str = "Fa";
+      break;
+    case 96:
+      RNS::F_str = "Fray";
       break;
     default:
       {
@@ -1153,15 +1290,18 @@ int main(int argc, char **argv)
  // Set Rey_str, used for book keeping.
  if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
  {
-   if(RNS::Rey < 0)
-   {
-     RNS::Loop_reynolds = true;
-   }
-   else
+   if(RNS::Rey >= 0)
    {
      std::ostringstream strs;
      strs << "R" << RNS::Rey;
      RNS::Rey_str = strs.str();
+   }
+   else
+   {
+     std::cout << "Looping Reynolds" << std::endl; 
+     std::cout << "Rey_start: " << RNS::Rey_start << std::endl; 
+     std::cout << "Rey_incre: " << RNS::Rey_incre << std::endl; 
+     std::cout << "Rey_end: " << RNS::Rey_end << std::endl; 
    }
  }
 

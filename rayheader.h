@@ -56,6 +56,39 @@ namespace RayGlobalAMGParam
 //=============================================================================
 namespace Hypre_Subsidiary_Preconditioner_Helper
 {                 
+  void print_hypre_settings(Preconditioner* preconditioner_pt)
+  {
+    HyprePreconditioner* h_prec_pt = 
+      static_cast<HyprePreconditioner*>(preconditioner_pt);
+    
+    // Print AMG iterations:
+    std::cout << "HyprePreconditioner settings are: " << std::endl;
+    std::cout << "Max_iter: " << h_prec_pt->amg_iterations() << std::endl;
+    std::cout << "smoother iter: " << h_prec_pt->amg_smoother_iterations() << std::endl;
+    std::cout << "Hypre_method: " << h_prec_pt->hypre_method() << std::endl;
+    std::cout << "internal_preconditioner: " << h_prec_pt->internal_preconditioner() << std::endl;
+    std::cout << "AMG_using_simple_smoothing: " << h_prec_pt->amg_using_simple_smoothing_flag() << std::endl; 
+    std::cout << "AMG_simple_smoother: " << h_prec_pt->amg_simple_smoother() << std::endl; 
+    std::cout << "AMG_complex_smoother: " << h_prec_pt->amg_complex_smoother() << std::endl; 
+    std::cout << "AMG_coarsening: " << h_prec_pt->amg_coarsening() << std::endl;
+    std::cout << "AMG_max_levels: " << h_prec_pt->amg_max_levels() << std::endl;
+    std::cout << "AMG_damping: " << h_prec_pt->amg_damping() << std::endl;
+    std::cout << "AMG_strength: " << h_prec_pt->amg_strength() << std::endl;;
+    std::cout << "AMG_max_row_sum: " << h_prec_pt->amg_max_row_sum() << std::endl;
+    std::cout << "AMG_truncation: " << h_prec_pt->amg_truncation() << std::endl;
+    std::cout << "\n" << std::endl;
+  }
+
+  void reset_amg_param()
+   {
+     RayGlobalAMGParam::amg_strength = -1.0;
+     RayGlobalAMGParam::amg_damping = -1.0;
+     RayGlobalAMGParam::amg_coarsening = -1;
+     RayGlobalAMGParam::amg_smoother = -1;
+     RayGlobalAMGParam::amg_iterations = -1;
+     RayGlobalAMGParam::amg_smoother_iterations = -1;
+   }
+
   Preconditioner* set_hypre_for_2D_poison_problem()
   {
     Preconditioner* another_preconditioner_pt =  
@@ -101,7 +134,8 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
   } 
   ///////////////////////////////////////////////
   ///////////////////////////////////////////////
-  Preconditioner* set_hypre_ray()
+
+  Preconditioner* set_hypre_ray(const bool& print_hypre=false)
   {
     // Everything can be set! But defaults are used...
 
@@ -124,7 +158,7 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
 
     hypre_preconditioner_pt
       ->set_amg_iterations(RayGlobalAMGParam::amg_iterations);
-
+    
     // Set the number of amg smoother iterations.
     if(RayGlobalAMGParam::amg_smoother_iterations == -1)
      {
@@ -132,7 +166,7 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
      }
 
     hypre_preconditioner_pt
-      ->amg_smoother_iterations() = RayGlobalAMGParam::amg_iterations;
+      ->amg_smoother_iterations() = RayGlobalAMGParam::amg_smoother_iterations;
 
     // Store this information.
     std::stringstream cyclestream;
@@ -229,6 +263,11 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
       std::cout << "Please set the amg_strengh using --amg_strength" << std::endl;
       pause("Do not continue");
     }
+
+    if(print_hypre)
+     {
+      print_hypre_settings(another_preconditioner_pt);
+     }
     
     std::cout << "RAYHYPRE: " << cycle_str
                               << coarsening_str 
@@ -236,6 +275,7 @@ namespace Hypre_Subsidiary_Preconditioner_Helper
                               << damping_str
                               << strength_str
                               << std::endl;
+    reset_amg_param();
     
     return another_preconditioner_pt;
   }
