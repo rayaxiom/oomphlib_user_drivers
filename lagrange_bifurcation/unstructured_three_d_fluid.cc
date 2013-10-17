@@ -45,6 +45,8 @@
 using namespace std;
 using namespace oomph;
 
+enum MeshType { HEXAHEDRAL, TETRAHEDRAL};
+
 namespace RayNamespace
 {
   // CL - set directly from the commandline.
@@ -52,6 +54,7 @@ namespace RayNamespace
   // value.
 
   // Set the defaults.
+  unsigned Mesh_type = 0; // SL, 0 = TET, 1 = HEX
   unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
   unsigned NS_solver = 1; //CL, 0 = SuperLU, 1 - LSC
   unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
@@ -63,6 +66,7 @@ namespace RayNamespace
                              // the default is the norm of the momentum block.
 
   std::string Prob_str = "Bi"; //Set from CL, a unique identifier.
+  std::string Mesh_str = "Tet"; //Set from CL, Tet or Hex
   std::string W_str = "We"; //Set from CL, e - Exact(LU), no other solver.
   std::string NS_str = "Nl"; //Set from CL, e - Exact, l - LSC
   std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
@@ -117,6 +121,9 @@ namespace RayNamespace
   int p_amg_smoother = -1;
   int p_amg_iterations = -1;
   int p_amg_smoother_iterations = -1;
+
+  MeshType myMeshType = TETRAHEDRAL;
+
 }
 
 //////////////////////////////////////////////////////////////////
@@ -286,8 +293,11 @@ public:
  void create_parall_outflow_lagrange_elements(const unsigned &b,
                                               Mesh* const &bulk_mesh_pt,
                                               Mesh* const &surface_mesh_pt);
+
+ Mesh* Fluid_mesh_pt;
+
  /// Bulk fluid mesh
- BrickFromTetMesh<ELEMENT>* Fluid_mesh_pt; // RAYRAY new brick mesh stuff
+ //BrickFromTetMesh<ELEMENT>* Fluid_mesh_pt; // RAYRAY new brick mesh stuff
  //TetgenMesh<ELEMENT>* Fluid_mesh_pt;
 
  /// Meshes of fluid traction elements that apply pressure at in/outflow
@@ -340,17 +350,35 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  bool split_corner_elements=true;
 
  // RAYRAY new brick mesh stuff
- Fluid_mesh_pt =  new BrickFromTetMesh<ELEMENT>(node_file_name,
-                                                element_file_name,
-                                                face_file_name,
-                                                split_corner_elements,
-                                                time_stepper_pt());
+ if(RNS::myMeshType == HEXAHEDRAL)
+  {
+   std::cout << "Doing HEXAHEDRAL" << std::endl; 
+   
+   Fluid_mesh_pt =  new BrickFromTetMesh<ELEMENT>(node_file_name,
+                                                  element_file_name,
+                                                  face_file_name,
+                                                  split_corner_elements,
+                                                  time_stepper_pt());
+  }
+ else if(RNS::myMeshType == TETRAHEDRAL)
+  {
+   std::cout << "Doing TETRAHEDRAL" << std::endl; 
+   
+   Fluid_mesh_pt =  new TetgenMesh<ELEMENT>(node_file_name,
+                                            element_file_name,
+                                            face_file_name,
+                                            split_corner_elements,
+                                            time_stepper_pt());
+  }
+ else
+  {
+   std::ostringstream err_msg;
+   err_msg << "No such mesh shapes." << std::endl;
 
-//  Fluid_mesh_pt =  new TetgenMesh<ELEMENT>(node_file_name,
-//                                          element_file_name,
-//                                          face_file_name,
-//                                          split_corner_elements,
-//                                          time_stepper_pt()); // RAYRAY
+   throw OomphLibError(err_msg.str(),
+                       OOMPH_CURRENT_FUNCTION,
+                       OOMPH_EXCEPTION_LOCATION);
+  }
 
 
  // Find elements next to boundaries
@@ -1032,6 +1060,8 @@ int main(int argc, char **argv)
  CommandLineArgs::specify_command_line_flag("--doc_prec",
                                             &RNS::Doc_prec_dir);
 
+ CommandLineArgs::specify_command_line_flag("--mesh_type", &RNS::Mesh_type);
+
  CommandLineArgs::specify_command_line_flag("--w_solver", &RNS::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &RNS::NS_solver);
  CommandLineArgs::specify_command_line_flag("--p_solver", &RNS::P_solver);
@@ -1095,6 +1125,34 @@ int main(int argc, char **argv)
 
  // Set the strings to identify the preconditioning,
  // This is used purely for book keeping purposes.
+
+ // Default: W_solver = 0, W_str = We
+ if(CommandLineArgs::command_line_flag_has_been_set("--mesh_type"))
+ {
+  switch(RNS::Mesh_type)
+  {
+    case 0:
+      RNS::Mesh_str = "Tet";
+      RNS::myMeshType = TETRAHEDRAL;
+      break;
+    case 1:
+    {
+      RNS::Mesh_str = "Hex";
+      RNS::myMeshType = HEXAHEDRAL;
+    }
+      break;
+    default:
+    {
+     std::ostringstream err_msg;
+     err_msg << "No such mesh encoded" << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+    }
+  }  // switch
+ } // if
+
 
  // Default: W_solver = 0, W_str = We
  if(CommandLineArgs::command_line_flag_has_been_set("--w_solver"))
@@ -1307,24 +1365,55 @@ int main(int argc, char **argv)
 
 /////////////////////////////////////////////// 
  //Set up the problem
- //UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
- // RAYRAY new brick mesh stuff
- UnstructuredFluidProblem<QTaylorHoodElement<3> > problem;
+ if(RNS::myMeshType == HEXAHEDRAL)
+  {
+   UnstructuredFluidProblem<QTaylorHoodElement<3> > problem;
 
    // Setup the label. Used for doc solution and preconditioner.
-   RNS::Label = RNS::Prob_str
-               + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
-               + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
-               + RNS::W_approx_str + RNS::Sigma_str;
+   RNS::Label = RNS::Prob_str + RNS::Mesh_str
+                + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
+                + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
+                + RNS::W_approx_str + RNS::Sigma_str;
 
-   time_t rawtime;
-   time(&rawtime);
+    time_t rawtime;
+    time(&rawtime);
 
-   std::cout << "RAYDOING: "
-     << RNS::Label
-     << " on " << ctime(&rawtime) << std::endl;
+    std::cout << "RAYDOING: "
+      << RNS::Label
+      << " on " << ctime(&rawtime) << std::endl;
 
- problem.unsteady_run();
+     problem.unsteady_run();
+  }
+ else if(RNS::myMeshType == TETRAHEDRAL)
+  {
+   UnstructuredFluidProblem<TTaylorHoodElement<3> > problem;
+
+   // Setup the label. Used for doc solution and preconditioner.
+   RNS::Label = RNS::Prob_str + RNS::Mesh_str
+                + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
+                + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
+                + RNS::W_approx_str + RNS::Sigma_str;
+
+    time_t rawtime;
+    time(&rawtime);
+
+    std::cout << "RAYDOING: "
+      << RNS::Label
+      << " on " << ctime(&rawtime) << std::endl;
+
+     problem.unsteady_run();
+  }
+ else
+  {
+   std::ostringstream err_msg;
+   err_msg << "No such mesh shapes." << std::endl;
+
+   throw OomphLibError(err_msg.str(),
+                       OOMPH_CURRENT_FUNCTION,
+                       OOMPH_EXCEPTION_LOCATION);
+  }
+
+
 
    // We now output the iteration and time.
    Vector<Vector<Vector<double> > > iters_times
