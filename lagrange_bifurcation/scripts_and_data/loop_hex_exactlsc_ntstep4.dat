@@ -1,0 +1,555 @@
+Opening fsi_bifurcation_fluid.poly.
+Constructing Delaunay tetrahedralization.
+Delaunay seconds:  0
+Creating surface mesh.
+Recovering boundaries.
+Boundary recovery seconds:  0
+Removing exterior tetrahedra.
+Hole seconds:  0
+Repairing mesh.
+Repair seconds:  0
+Adding Steiner points to enforce quality.
+Quality seconds:  0
+Optimizing mesh.
+Optimize seconds:  0
+
+Writing fsi_bifurcation_fluid.1.node.
+Writing fsi_bifurcation_fluid.1.ele.
+Writing fsi_bifurcation_fluid.1.face.
+
+Output seconds:  0
+Total running seconds:  0
+
+Statistics:
+
+  Input points: 18
+  Input facets: 15
+  Input segments: 31
+  Input holes: 0
+  Input regions: 0
+
+  Mesh points: 111
+  Mesh tetrahedra: 246
+  Mesh faces: 598
+  Mesh edges: 462
+  Mesh boundary faces: 212
+  Mesh boundary edges: 83
+
+Oomph-lib communiator is a duplicate of MPI_COMM_WORLD
+
+Processor 0:   Specified (and recognised) command line flags:
+Processor 0:   ----------------------------------------------
+Processor 0:   --rey 0
+Processor 0:   --ntsteps 4
+Processor 0:   --mesh_type 1
+Processor 0:   --ns_solver 1
+Processor 0:   --visc 0
+Processor 0:   --w_solver 0
+
+Processor 0:   Created Time with 2 timesteps
+Doing HEXAHEDRAL
+Number of equations: 22763
+RAYDOING: BiHexWeNlFePeSimR0A0.2 on Tue Nov  5 15:47:57 2013
+
+IC = impulsive start
+T_min = 0
+T_max = 0.5
+Dt = 0.125
+Ntsteps = 4
+RNS::Doc_soln: 0
+RNS::Soln_dir: RESLT
+TIMESTEP 0
+Processor 0:   Initial Maximum residuals 0.0216958
+
+Time for setup of Jacobian [sec]: 35.6613
+Processor 0:   RAYSIGMA: -9.50641116815181
+Processor 0:   Time to build epetra matrix [sec] : 0.0408039
+Processor 0:   Time to build epetra matrix [sec] : 0.178856
+Processor 0:   Time to build epetra matrix [sec] : 0.0528202
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 9.91378
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 9.57625e-07
+Processor 0:   Number of iterations to convergence: 41
+
+Processor 0:   Time for solve with GMRES  [sec]: 14.5617
+
+Processor 0:   Time for linear solver ( ndof = 22763 ) [sec]: 50.2307
+
+Processor 0:   Newton Step 1: Maximum residuals 2.50242e-08
+
+Processor 0:   Total time for linear solver (ndof=22763) [sec]: 50.2307
+Processor 0:   Total time for Newton solver (ndof=22763) [sec]: 55.8324
+Processor 0:   Time outside linear solver        : 10.0331 %
+
+Time is now 0.125
+TIMESTEP 1
+Processor 0:   Initial Maximum residuals 0.0523783
+
+Time for setup of Jacobian [sec]: 24.8486
+Processor 0:   RAYSIGMA: -9.50641116815181
+Processor 0:   Time to build epetra matrix [sec] : 0.0661931
+Processor 0:   Time to build epetra matrix [sec] : 0.269038
+Processor 0:   Time to build epetra matrix [sec] : 0.0816131
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 15.2275
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 9.578e-07
+Processor 0:   Number of iterations to convergence: 41
+
+Processor 0:   Time for solve with GMRES  [sec]: 22.5919
+
+Processor 0:   Time for linear solver ( ndof = 22763 ) [sec]: 47.4498
+
+Processor 0:   Newton Step 1: Maximum residuals 6.04257e-08
+
+Processor 0:   Total time for linear solver (ndof=22763) [sec]: 47.4498
+Processor 0:   Total time for Newton solver (ndof=22763) [sec]: 52.972
+Processor 0:   Time outside linear solver        : 10.4247 %
+
+Time is now 0.25
+TIMESTEP 2
+Processor 0:   Initial Maximum residuals 0.0523783
+
+Time for setup of Jacobian [sec]: 36.3825
+Processor 0:   RAYSIGMA: -9.50641116815181
+Processor 0:   Time to build epetra matrix [sec] : 0.0632529
+Processor 0:   Time to build epetra matrix [sec] : 0.262547
+Processor 0:   Time to build epetra matrix [sec] : 0.0787771
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 14.9693
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 9.58037e-07
+Processor 0:   Number of iterations to convergence: 41
+
+Processor 0:   Time for solve with GMRES  [sec]: 22.3023
+
+Processor 0:   Time for linear solver ( ndof = 22763 ) [sec]: 58.6936
+
+Processor 0:   Newton Step 1: Maximum residuals 6.04416e-08
+
+Processor 0:   Total time for linear solver (ndof=22763) [sec]: 58.6936
+Processor 0:   Total time for Newton solver (ndof=22763) [sec]: 65.131
+Processor 0:   Time outside linear solver        : 9.88378 %
+
+Time is now 0.375
+TIMESTEP 3
+Processor 0:   Initial Maximum residuals 0.0216958
+
+Time for setup of Jacobian [sec]: 36.7299
+Processor 0:   RAYSIGMA: -9.50641116815181
+Processor 0:   Time to build epetra matrix [sec] : 0.049917
+Processor 0:   Time to build epetra matrix [sec] : 0.174598
+Processor 0:   Time to build epetra matrix [sec] : 0.050174
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 13.9229
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 9.58561e-07
+Processor 0:   Number of iterations to convergence: 41
+
+Processor 0:   Time for solve with GMRES  [sec]: 21.2003
+
+Processor 0:   Time for linear solver ( ndof = 22763 ) [sec]: 57.9393
+
+Processor 0:   Newton Step 1: Maximum residuals 2.50496e-08
+
+Processor 0:   Total time for linear solver (ndof=22763) [sec]: 57.9393
+Processor 0:   Total time for Newton solver (ndof=22763) [sec]: 64.6579
+Processor 0:   Time outside linear solver        : 10.3911 %
+
+Time is now 0.5
+RAYITS:	0	41 	41(1)
+RAYITS:	1	41 	41(1)
+RAYITS:	2	41 	41(1)
+RAYITS:	3	41 	41(1)
+RAYAVGITS:		41
+RAYPRECSETUP:	0	9.91378 	9.91378(1)
+RAYPRECSETUP:	1	15.2275 	15.2275(1)
+RAYPRECSETUP:	2	14.9693 	14.9693(1)
+RAYPRECSETUP:	3	13.9229 	13.9229(1)
+RAYLINSOLVER:	0	14.5617 	14.5617(1)
+RAYLINSOLVER:	1	22.5919 	22.5919(1)
+RAYLINSOLVER:	2	22.3023 	22.3023(1)
+RAYLINSOLVER:	3	21.2003 	21.2003(1)
+Opening fsi_bifurcation_fluid.poly.
+Constructing Delaunay tetrahedralization.
+Delaunay seconds:  0
+Creating surface mesh.
+Recovering boundaries.
+Boundary recovery seconds:  0
+Removing exterior tetrahedra.
+Hole seconds:  0
+Repairing mesh.
+Repair seconds:  0
+Adding Steiner points to enforce quality.
+Quality seconds:  0
+Optimizing mesh.
+Optimize seconds:  0
+
+Writing fsi_bifurcation_fluid.1.node.
+Writing fsi_bifurcation_fluid.1.ele.
+Writing fsi_bifurcation_fluid.1.face.
+
+Output seconds:  0
+Total running seconds:  0
+
+Statistics:
+
+  Input points: 18
+  Input facets: 15
+  Input segments: 31
+  Input holes: 0
+  Input regions: 0
+
+  Mesh points: 153
+  Mesh tetrahedra: 375
+  Mesh faces: 893
+  Mesh edges: 670
+  Mesh boundary faces: 286
+  Mesh boundary edges: 99
+
+Oomph-lib communiator is a duplicate of MPI_COMM_WORLD
+
+Processor 0:   Specified (and recognised) command line flags:
+Processor 0:   ----------------------------------------------
+Processor 0:   --rey 0
+Processor 0:   --ntsteps 4
+Processor 0:   --mesh_type 1
+Processor 0:   --ns_solver 1
+Processor 0:   --visc 0
+Processor 0:   --w_solver 0
+
+Processor 0:   Created Time with 2 timesteps
+Doing HEXAHEDRAL
+Number of equations: 35797
+RAYDOING: BiHexWeNlFePeSimR0A0.2 on Tue Nov  5 15:51:56 2013
+
+IC = impulsive start
+T_min = 0
+T_max = 0.5
+Dt = 0.125
+Ntsteps = 4
+RNS::Doc_soln: 0
+RNS::Soln_dir: RESLT
+TIMESTEP 0
+Processor 0:   Initial Maximum residuals 0.0216958
+
+Time for setup of Jacobian [sec]: 47.8864
+Processor 0:   RAYSIGMA: -20.5347819602519
+Processor 0:   Time to build epetra matrix [sec] : 0.0666671
+Processor 0:   Time to build epetra matrix [sec] : 0.287753
+Processor 0:   Time to build epetra matrix [sec] : 0.0790539
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 24.2548
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.59365e-07
+Processor 0:   Number of iterations to convergence: 50
+
+Processor 0:   Time for solve with GMRES  [sec]: 37.5195
+
+Processor 0:   Time for linear solver ( ndof = 35797 ) [sec]: 85.4188
+
+Processor 0:   Newton Step 1: Maximum residuals 1.58888e-08
+
+Processor 0:   Total time for linear solver (ndof=35797) [sec]: 85.4188
+Processor 0:   Total time for Newton solver (ndof=35797) [sec]: 93.6731
+Processor 0:   Time outside linear solver        : 8.81183 %
+
+Time is now 0.125
+TIMESTEP 1
+Processor 0:   Initial Maximum residuals 0.0523783
+
+Time for setup of Jacobian [sec]: 55.2041
+Processor 0:   RAYSIGMA: -20.5347819602519
+Processor 0:   Time to build epetra matrix [sec] : 0.092391
+Processor 0:   Time to build epetra matrix [sec] : 0.37893
+Processor 0:   Time to build epetra matrix [sec] : 0.127136
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 26.5852
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.59319e-07
+Processor 0:   Number of iterations to convergence: 50
+
+Processor 0:   Time for solve with GMRES  [sec]: 45.3553
+
+Processor 0:   Time for linear solver ( ndof = 35797 ) [sec]: 100.573
+
+Processor 0:   Newton Step 1: Maximum residuals 3.83581e-08
+
+Processor 0:   Total time for linear solver (ndof=35797) [sec]: 100.573
+Processor 0:   Total time for Newton solver (ndof=35797) [sec]: 111.02
+Processor 0:   Time outside linear solver        : 9.41015 %
+
+Time is now 0.25
+TIMESTEP 2
+Processor 0:   Initial Maximum residuals 0.0523783
+
+Time for setup of Jacobian [sec]: 58.6864
+Processor 0:   RAYSIGMA: -20.5347819602519
+Processor 0:   Time to build epetra matrix [sec] : 0.106006
+Processor 0:   Time to build epetra matrix [sec] : 0.44256
+Processor 0:   Time to build epetra matrix [sec] : 0.125062
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 32.5585
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.59251e-07
+Processor 0:   Number of iterations to convergence: 50
+
+Processor 0:   Time for solve with GMRES  [sec]: 51.6202
+
+Processor 0:   Time for linear solver ( ndof = 35797 ) [sec]: 110.321
+
+Processor 0:   Newton Step 1: Maximum residuals 3.83567e-08
+
+Processor 0:   Total time for linear solver (ndof=35797) [sec]: 110.321
+Processor 0:   Total time for Newton solver (ndof=35797) [sec]: 120.761
+Processor 0:   Time outside linear solver        : 8.64547 %
+
+Time is now 0.375
+TIMESTEP 3
+Processor 0:   Initial Maximum residuals 0.0216958
+
+Time for setup of Jacobian [sec]: 57.385
+Processor 0:   RAYSIGMA: -20.5347819602519
+Processor 0:   Time to build epetra matrix [sec] : 0.068846
+Processor 0:   Time to build epetra matrix [sec] : 0.289208
+Processor 0:   Time to build epetra matrix [sec] : 0.0832939
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 21.1756
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.59069e-07
+Processor 0:   Number of iterations to convergence: 50
+
+Processor 0:   Time for solve with GMRES  [sec]: 33.1943
+
+Processor 0:   Time for linear solver ( ndof = 35797 ) [sec]: 90.5885
+
+Processor 0:   Newton Step 1: Maximum residuals 1.58861e-08
+
+Processor 0:   Total time for linear solver (ndof=35797) [sec]: 90.5885
+Processor 0:   Total time for Newton solver (ndof=35797) [sec]: 99.01
+Processor 0:   Time outside linear solver        : 8.50572 %
+
+Time is now 0.5
+RAYITS:	0	50 	50(1)
+RAYITS:	1	50 	50(1)
+RAYITS:	2	50 	50(1)
+RAYITS:	3	50 	50(1)
+RAYAVGITS:		50
+RAYPRECSETUP:	0	24.2548 	24.2548(1)
+RAYPRECSETUP:	1	26.5852 	26.5852(1)
+RAYPRECSETUP:	2	32.5585 	32.5585(1)
+RAYPRECSETUP:	3	21.1756 	21.1756(1)
+RAYLINSOLVER:	0	37.5195 	37.5195(1)
+RAYLINSOLVER:	1	45.3553 	45.3553(1)
+RAYLINSOLVER:	2	51.6202 	51.6202(1)
+RAYLINSOLVER:	3	33.1943 	33.1943(1)
+Opening fsi_bifurcation_fluid.poly.
+Constructing Delaunay tetrahedralization.
+Delaunay seconds:  0
+Creating surface mesh.
+Recovering boundaries.
+Boundary recovery seconds:  0
+Removing exterior tetrahedra.
+Hole seconds:  0
+Repairing mesh.
+Repair seconds:  0
+Adding Steiner points to enforce quality.
+Quality seconds:  0.01
+Optimizing mesh.
+Optimize seconds:  0
+
+Writing fsi_bifurcation_fluid.1.node.
+Writing fsi_bifurcation_fluid.1.ele.
+Writing fsi_bifurcation_fluid.1.face.
+
+Output seconds:  0
+Total running seconds:  0.01
+
+Statistics:
+
+  Input points: 18
+  Input facets: 15
+  Input segments: 31
+  Input holes: 0
+  Input regions: 0
+
+  Mesh points: 234
+  Mesh tetrahedra: 661
+  Mesh faces: 1529
+  Mesh edges: 1101
+  Mesh boundary faces: 414
+  Mesh boundary edges: 117
+
+Oomph-lib communiator is a duplicate of MPI_COMM_WORLD
+
+Processor 0:   Specified (and recognised) command line flags:
+Processor 0:   ----------------------------------------------
+Processor 0:   --rey 0
+Processor 0:   --ntsteps 4
+Processor 0:   --mesh_type 1
+Processor 0:   --ns_solver 1
+Processor 0:   --visc 0
+Processor 0:   --w_solver 0
+
+Processor 0:   Created Time with 2 timesteps
+Doing HEXAHEDRAL
+Number of equations: 63367
+RAYDOING: BiHexWeNlFePeSimR0A0.2 on Tue Nov  5 15:59:02 2013
+
+IC = impulsive start
+T_min = 0
+T_max = 0.5
+Dt = 0.125
+Ntsteps = 4
+RNS::Doc_soln: 0
+RNS::Soln_dir: RESLT
+TIMESTEP 0
+Processor 0:   Initial Maximum residuals 0.0119779
+
+Time for setup of Jacobian [sec]: 78.653
+Processor 0:   RAYSIGMA: -14.4442193598574
+Processor 0:   Time to build epetra matrix [sec] : 0.196563
+Processor 0:   Time to build epetra matrix [sec] : 0.880151
+Processor 0:   Time to build epetra matrix [sec] : 0.251675
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 89.3347
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.72559e-07
+Processor 0:   Number of iterations to convergence: 40
+
+Processor 0:   Time for solve with GMRES  [sec]: 125.904
+
+Processor 0:   Time for linear solver ( ndof = 63367 ) [sec]: 204.591
+
+Processor 0:   Newton Step 1: Maximum residuals 1.34112e-08
+
+Processor 0:   Total time for linear solver (ndof=63367) [sec]: 204.591
+Processor 0:   Total time for Newton solver (ndof=63367) [sec]: 219.116
+Processor 0:   Time outside linear solver        : 6.62894 %
+
+Time is now 0.125
+TIMESTEP 1
+Processor 0:   Initial Maximum residuals 0.0289172
+
+Time for setup of Jacobian [sec]: 106.226
+Processor 0:   RAYSIGMA: -14.4442193598574
+Processor 0:   Time to build epetra matrix [sec] : 0.185622
+Processor 0:   Time to build epetra matrix [sec] : 0.838618
+Processor 0:   Time to build epetra matrix [sec] : 0.232538
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 86.2373
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.72568e-07
+Processor 0:   Number of iterations to convergence: 40
+
+Processor 0:   Time for solve with GMRES  [sec]: 109.338
+
+Processor 0:   Time for linear solver ( ndof = 63367 ) [sec]: 215.584
+
+Processor 0:   Newton Step 1: Maximum residuals 3.23784e-08
+
+Processor 0:   Total time for linear solver (ndof=63367) [sec]: 215.584
+Processor 0:   Total time for Newton solver (ndof=63367) [sec]: 232.355
+Processor 0:   Time outside linear solver        : 7.21783 %
+
+Time is now 0.25
+TIMESTEP 2
+Processor 0:   Initial Maximum residuals 0.0289172
+
+Time for setup of Jacobian [sec]: 70.8881
+Processor 0:   RAYSIGMA: -14.4442193598574
+Processor 0:   Time to build epetra matrix [sec] : 0.121812
+Processor 0:   Time to build epetra matrix [sec] : 0.552683
+Processor 0:   Time to build epetra matrix [sec] : 0.149044
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 70.3094
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.72578e-07
+Processor 0:   Number of iterations to convergence: 40
+
+Processor 0:   Time for solve with GMRES  [sec]: 106.18
+
+Processor 0:   Time for linear solver ( ndof = 63367 ) [sec]: 177.097
+
+Processor 0:   Newton Step 1: Maximum residuals 3.23797e-08
+
+Processor 0:   Total time for linear solver (ndof=63367) [sec]: 177.097
+Processor 0:   Total time for Newton solver (ndof=63367) [sec]: 192.198
+Processor 0:   Time outside linear solver        : 7.85741 %
+
+Time is now 0.375
+TIMESTEP 3
+Processor 0:   Initial Maximum residuals 0.0119779
+
+Time for setup of Jacobian [sec]: 105.841
+Processor 0:   RAYSIGMA: -14.4442193598574
+Processor 0:   Time to build epetra matrix [sec] : 0.175363
+Processor 0:   Time to build epetra matrix [sec] : 0.571707
+Processor 0:   Time to build epetra matrix [sec] : 0.159318
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Setting up SuperLU (exact) preconditioner
+Processor 0:   Time for setup of preconditioner  [sec]: 81.0739
+
+Processor 0:   GMRES converged (1). Normalised residual norm: 8.726e-07
+Processor 0:   Number of iterations to convergence: 40
+
+Processor 0:   Time for solve with GMRES  [sec]: 111.956
+
+Processor 0:   Time for linear solver ( ndof = 63367 ) [sec]: 217.819
+
+Processor 0:   Newton Step 1: Maximum residuals 1.34133e-08
+
+Processor 0:   Total time for linear solver (ndof=63367) [sec]: 217.819
+Processor 0:   Total time for Newton solver (ndof=63367) [sec]: 233.429
+Processor 0:   Time outside linear solver        : 6.68732 %
+
+Time is now 0.5
+RAYITS:	0	40 	40(1)
+RAYITS:	1	40 	40(1)
+RAYITS:	2	40 	40(1)
+RAYITS:	3	40 	40(1)
+RAYAVGITS:		40
+RAYPRECSETUP:	0	89.3347 	89.3347(1)
+RAYPRECSETUP:	1	86.2373 	86.2373(1)
+RAYPRECSETUP:	2	70.3094 	70.3094(1)
+RAYPRECSETUP:	3	81.0739 	81.0739(1)
+RAYLINSOLVER:	0	125.904 	125.904(1)
+RAYLINSOLVER:	1	109.338 	109.338(1)
+RAYLINSOLVER:	2	106.18 	106.18(1)
+RAYLINSOLVER:	3	111.956 	111.956(1)
