@@ -53,6 +53,9 @@ namespace RayNamespace
   // To set from CL - a CL value is set, this is changed depending on that
   // value.
 
+  double Mesh_area = 0.0;
+  std::string Mesh_folder_str = "";
+
   // Set the defaults.
   unsigned Mesh_type = 0; // SL, 0 = TET, 1 = HEX
   unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
@@ -61,7 +64,6 @@ namespace RayNamespace
   unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
   unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
   double Rey = 100.0; //CL, Reynolds number
-  double Maxarea = 0.2; //CL, maximum area/vol of each elements.
   double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
                              // the default is the norm of the momentum block.
   
@@ -80,7 +82,6 @@ namespace RayNamespace
   std::string P_str = "Pe"; //Set from CL, e - Exact, a - AMG
   std::string Vis_str = "Sim"; //Set from CL, Sim - Simple, Str = Stress Diver.
   std::string Rey_str = "R100"; //Set from CL, Reynolds number
-  std::string Maxarea_str = "A0.2";
   std::string Sigma_str = ""; //Set from CL, sigma being used. is norm, then is
                               // null.
   std::string W_approx_str=""; //Set from CL, use diagonal approximation for W
@@ -351,9 +352,10 @@ UnstructuredFluidProblem<ELEMENT>::UnstructuredFluidProblem()
  add_time_stepper_pt(new BDF<2>);
 
  //Create fluid bulk mesh, sub-dividing "corner" elements
- string node_file_name="fsi_bifurcation_fluid.1.node";
- string element_file_name="fsi_bifurcation_fluid.1.ele";
- string face_file_name="fsi_bifurcation_fluid.1.face";
+ string mesh_folder = "tetgen_files/" + RNS::Mesh_folder_str + "/";
+ string node_file_name=mesh_folder+"fsi_bifurcation_fluid.1.node";
+ string element_file_name=mesh_folder+"fsi_bifurcation_fluid.1.ele";
+ string face_file_name=mesh_folder+"fsi_bifurcation_fluid.1.face";
  bool split_corner_elements=true;
 
  // RAYRAY new brick mesh stuff
@@ -1015,7 +1017,7 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
  }
 
  // Loop over timesteps
- for (unsigned t = 0; t < RNS::Ntsteps; t++) 
+ for (int t = 0; t < RNS::Ntsteps; t++) 
   {
    std::cout << "TIMESTEP " << t << std::endl; 
     
@@ -1074,7 +1076,9 @@ int main(int argc, char **argv)
  CommandLineArgs::specify_command_line_flag("--doc_prec",
                                             &RNS::Doc_prec_dir);
 
+ // Mesh parameter
  CommandLineArgs::specify_command_line_flag("--mesh_type", &RNS::Mesh_type);
+ CommandLineArgs::specify_command_line_flag("--mesh_area", &RNS::Mesh_area);
 
  // Time stepping parameters.
  CommandLineArgs::specify_command_line_flag("--t_min", &RNS::T_min);
@@ -1082,12 +1086,13 @@ int main(int argc, char **argv)
  CommandLineArgs::specify_command_line_flag("--dt", &RNS::Dt);
  CommandLineArgs::specify_command_line_flag("--ntsteps", &RNS::Ntsteps);
 
+ 
+ // Problem/solver parameters
  CommandLineArgs::specify_command_line_flag("--w_solver", &RNS::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &RNS::NS_solver);
  CommandLineArgs::specify_command_line_flag("--p_solver", &RNS::P_solver);
  CommandLineArgs::specify_command_line_flag("--f_solver", &RNS::F_solver);
  CommandLineArgs::specify_command_line_flag("--visc", &RNS::Vis);
- CommandLineArgs::specify_command_line_flag("--maxarea", &RNS::Maxarea);
  CommandLineArgs::specify_command_line_flag("--rey", &RNS::Rey);
  CommandLineArgs::specify_command_line_flag("--rey_start", &RNS::Rey_start);
  CommandLineArgs::specify_command_line_flag("--rey_incre", &RNS::Rey_incre);
@@ -1195,6 +1200,34 @@ int main(int argc, char **argv)
 
  // Set the strings to identify the preconditioning,
  // This is used purely for book keeping purposes.
+ 
+ if(CommandLineArgs::command_line_flag_has_been_set("--mesh_area"))
+ {
+   // Set the string to load the files.
+   // The RNS::Mesh_area parameter is a double.
+   // The actual mesh files are in tetgen_files/xdyz
+   // where d represents the decimal place.
+   // So we need to replace the decimal in the RNS::Mesh_area parameter with
+   // d.
+   std::ostringstream tmp_stringstream;
+   tmp_stringstream << RNS::Mesh_area;
+   RNS::Mesh_folder_str = tmp_stringstream.str();
+   std::replace(RNS::Mesh_folder_str.begin(), RNS::Mesh_folder_str.end(),
+                '.','d');
+
+   // Now we check if this folder actually exists.
+   // Actually, not doing this as it's better implemented in BOOST and we don't
+   // use BOOST (yet!).
+ }
+ else
+ {
+     std::ostringstream err_msg;
+     err_msg << "You have no set --mesh_area" << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+ }
 
  // Default: W_solver = 0, W_str = We
  if(CommandLineArgs::command_line_flag_has_been_set("--mesh_type"))
@@ -1386,13 +1419,6 @@ int main(int argc, char **argv)
    }
  }
 
- if(CommandLineArgs::command_line_flag_has_been_set("--maxarea"))
- {
-   std::ostringstream strs;
-   strs << "A" << RNS::Maxarea;
-   RNS::Maxarea_str = strs.str();
- }
-
  // Set Use_axnorm, if sigma has not been set, norm os momentum block is used.
  if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
  {
@@ -1442,7 +1468,7 @@ int main(int argc, char **argv)
    // Setup the label. Used for doc solution and preconditioner.
    RNS::Label = RNS::Prob_str + RNS::Mesh_str
                 + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
-                + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
+                + RNS::Vis_str + RNS::Rey_str + "A" + RNS::Mesh_folder_str
                 + RNS::W_approx_str + RNS::Sigma_str;
 
     time_t rawtime;
@@ -1461,7 +1487,7 @@ int main(int argc, char **argv)
    // Setup the label. Used for doc solution and preconditioner.
    RNS::Label = RNS::Prob_str + RNS::Mesh_str
                 + RNS::W_str + RNS::NS_str + RNS::F_str + RNS::P_str
-                + RNS::Vis_str + RNS::Rey_str + RNS::Maxarea_str
+                + RNS::Vis_str + RNS::Rey_str + "A" + RNS::Mesh_folder_str
                 + RNS::W_approx_str + RNS::Sigma_str;
 
     time_t rawtime;

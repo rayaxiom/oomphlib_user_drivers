@@ -19,3 +19,7 @@ clean-local:
 	touch Validation
 	rm -r -f Validation
 	rm -f *~
+
+# Print top_builddir
+print-top_builddir: 
+	echo $(top_builddir)

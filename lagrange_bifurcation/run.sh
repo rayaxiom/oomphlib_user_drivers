@@ -6,11 +6,15 @@
 # 0.2 is the maximum area/volumne of the elements.
 # decrease it to get a finer mesh.
 
-touch ./RESLT_TH && rm -rf ./RESLT_TH && mkdir RESLT_TH && \
-make unstructured_three_d_fluid && \
-./unstructured_three_d_fluid && \
-cd RESLT_TH && \
-./../plot_it.bash && \
-paraview fluid_soln.pvd
+## PROGRAM NAME
+PROGRAM="unstructured_three_d_fluid"
+RESLTDIR="RESLT_TH"
+
+touch ./$RESLTDIR && rm -rf ./$RESLTDIR && mkdir $RESLTDIR && \
+make $PROGRAM && \
+./$PROGRAM --w_solver 0 --ns_solver 0 --rey 200 --doc_soln $RESLTDIR && \
+cd $RESLTDIR && \
+../plot_it.bash && \
+paraview soln.pvd
 
 
