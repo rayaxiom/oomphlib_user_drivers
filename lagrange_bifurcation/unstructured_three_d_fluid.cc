@@ -64,6 +64,13 @@ namespace RayNamespace
   double Maxarea = 0.2; //CL, maximum area/vol of each elements.
   double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
                              // the default is the norm of the momentum block.
+  
+  // The are the time step parameters. 
+  double T_min = 0; // Max time.
+  double T_max = 0.5; // Min time.
+  double Dt = -1; // if this is set, Ntsteps must not be set.
+  int Ntsteps = -1; // if this is set, Dt must not be set.
+
 
   std::string Prob_str = "Bi"; //Set from CL, a unique identifier.
   std::string Mesh_str = "Tet"; //Set from CL, Tet or Hex
@@ -975,19 +982,23 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
  Trace_file << "Hello!\n";
 
  // Period is 1.0
- double time_max = Global_Parameters::Period / 2.0; // time_max = 0.5
- double time_min = 0;
- unsigned ntsteps = 40;
+ //double time_max = Global_Parameters::Period / 2.0; // time_max = 0.5
+ //double time_min = 0;
+ //unsigned ntsteps = 40;
 
- time_max /=4;
- time_min /=4;
- ntsteps /=4;
- double dt = (time_max - time_min)/ntsteps;
+ //time_max /=4;
+ //time_min /=4;
+ //ntsteps /=4;
+ //double dt = (time_max - time_min)/ntsteps;
 
  if(Global_Parameters::Impulsive_start_flag)
   {
-   assign_initial_values_impulsive(dt);
-   std::cout << "IC = impulsive start" << std::endl; 
+   assign_initial_values_impulsive(RNS::Dt);
+   std::cout << "IC = impulsive start" << std::endl;
+   std::cout << "T_min = " << RNS::T_min << std::endl;
+   std::cout << "T_max = " << RNS::T_max << std::endl;
+   std::cout << "Dt = " << RNS::Dt << std::endl;
+   std::cout << "Ntsteps = " << RNS::Ntsteps << std::endl;
   }
 
  std::cout << "RNS::Doc_soln: " << RNS::Doc_soln << std::endl;
@@ -1004,12 +1015,12 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
  }
 
  // Loop over timesteps
- for (unsigned t = 0; t < ntsteps; t++) 
+ for (unsigned t = 0; t < RNS::Ntsteps; t++) 
   {
    std::cout << "TIMESTEP " << t << std::endl; 
     
    // Take one fixed timestep
-   unsteady_newton_solve(dt);
+   unsteady_newton_solve(RNS::Dt);
 
    // Output the time
    std::cout << "Time is now " << time_pt()->time() << std::endl; 
@@ -1026,7 +1037,10 @@ void UnstructuredFluidProblem<ELEMENT>::unsteady_run()
   
 }
 
-
+double round(double d)
+{
+  return floor(d + 0.5);
+}
 
 //=============start_main=================================================
 /// Demonstrate how to solve an unstructured 3D fluids problem
@@ -1061,6 +1075,12 @@ int main(int argc, char **argv)
                                             &RNS::Doc_prec_dir);
 
  CommandLineArgs::specify_command_line_flag("--mesh_type", &RNS::Mesh_type);
+
+ // Time stepping parameters.
+ CommandLineArgs::specify_command_line_flag("--t_min", &RNS::T_min);
+ CommandLineArgs::specify_command_line_flag("--t_max", &RNS::T_max);
+ CommandLineArgs::specify_command_line_flag("--dt", &RNS::Dt);
+ CommandLineArgs::specify_command_line_flag("--ntsteps", &RNS::Ntsteps);
 
  CommandLineArgs::specify_command_line_flag("--w_solver", &RNS::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &RNS::NS_solver);
@@ -1103,6 +1123,56 @@ int main(int argc, char **argv)
  ////////////////////////////////////////////////////
  // Now set up the flags/parameters for the problem//
  ////////////////////////////////////////////////////
+ 
+ // Time step parameters.
+ if(CommandLineArgs::command_line_flag_has_been_set("--dt"))
+ {
+   if(CommandLineArgs::command_line_flag_has_been_set("--ntsteps"))
+   {
+     std::ostringstream err_msg;
+     err_msg << "Cannot set both --dt and --ntsteps at the same time." 
+             << std::endl;
+     
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+
+   // dt has been set, we now work out how many time steps we need to go from
+   // T_min to T_max
+   RNS::Ntsteps = int(round((RNS::T_max - RNS::T_min)/RNS::Dt));
+ }
+ else if(CommandLineArgs::command_line_flag_has_been_set("--ntsteps"))
+ {
+   if(CommandLineArgs::command_line_flag_has_been_set("--dt"))
+   {
+     std::ostringstream err_msg;
+     err_msg << "Cannot set both --dt and --ntsteps at the same time."
+             << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+
+   // ntsteps has been set, we now work out the increment required for
+   // ntsteps to take place.
+   RNS::Dt = (RNS::T_max - RNS::T_min) / RNS::Ntsteps;
+ }
+ else
+ {
+   std::cout << "No time steps have been provided" << std::endl; 
+   RNS::Ntsteps = 40;
+   RNS::Dt = (RNS::T_max - RNS::T_min)/RNS::Ntsteps;
+
+   std::cout << "T_min = " << RNS::T_min << std::endl;
+   std::cout << "T_max = " << RNS::T_max << std::endl;
+   std::cout << "Dt = " << RNS::Dt << std::endl;
+   std::cout << "Ntsteps = " << RNS::Ntsteps << std::endl;
+ }
+
+
+ 
 
  // Document the solution? Default is false.
  if(CommandLineArgs::command_line_flag_has_been_set("--doc_soln"))
