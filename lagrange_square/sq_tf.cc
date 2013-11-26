@@ -294,7 +294,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  Doc_linear_solver_info_pt = SL::Doc_linear_solver_info_pt;
 
  // Assign the boundaries:
- //             2 slip
+ //             2 non slip
  //         ----------
  //         |        |
  // 3 Inflow|        |1 P.O.
@@ -341,70 +341,10 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // Combine all submeshes into a single Mesh
  build_global_mesh();
 
- unsigned num_bound = mesh_pt()->nboundary();
+ set_nonslip_BC(0,Bulk_mesh_pt);
+ set_nonslip_BC(2,Bulk_mesh_pt);
 
- // Set the boundary conditions for this problem: All nodes are
- // free by default -- just pin the ones that have Dirichlet conditions
- // here.
- for(unsigned ibound=0;ibound<num_bound;ibound++)
- { 
-   if(ibound != 1)
-   {
-     unsigned num_nod=mesh_pt()->nboundary_node(ibound);
-     for (unsigned inod=0;inod<num_nod;inod++)
-     {
-       // Get node
-       Node* nod_pt=mesh_pt()->boundary_node_pt(ibound,inod);
-
-       nod_pt->pin(0);
-       nod_pt->pin(1);
-     }
-   }
- }
-
- // Which boundary are we dealing with?
- unsigned current_bound = -1;
- 
- // The number of nodes on a boundary.
- unsigned num_nod = -1;
-
- // Inflow is at boundary 3
- current_bound = 3;
- num_nod= mesh_pt()->nboundary_node(current_bound);
- for(unsigned inod=0;inod<num_nod;inod++)
- {
-   Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
-   double x1=nod_pt->x(1);
-
-   double u=(x1-0.0)*(2.0-x1);
-
-
-   nod_pt->set_value(0,u);
-   nod_pt->set_value(1,0);
- }
-
- // Top boundary is slip.
- current_bound = 2;
- num_nod= mesh_pt()->nboundary_node(current_bound);
- for(unsigned inod=0;inod<num_nod;inod++)
- {
-   Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
-
-   if(!nod_pt->is_on_boundary(3))
-   {
-     nod_pt->unpin(0);
-     nod_pt->pin(1);
-
-     nod_pt->set_value(1,0.0);
-   }
- }
-
-
- 
- //set_nonslip_BC(0,Bulk_mesh_pt);
-// set_nonslip_BC(2,Bulk_mesh_pt);
-
-// set_inflow_BC(if_b,Bulk_mesh_pt);
+ set_inflow_BC(if_b,Bulk_mesh_pt);
  
  //Complete the problem setup to make the elements fully functional
 
@@ -883,8 +823,7 @@ set_inflow_BC(const unsigned &b,
     double x1_old = x0*sin(-SL::Ang) + x1*cos(-SL::Ang);
     
     // Now calculate the parabolic inflow at this point
-    //double u0_old = (x1_old - SL::Y_min)*(SL::Y_max - x1_old);
-    double u0_old = (x1_old - SL::Y_min)*(2.0 - x1_old);
+    double u0_old = (x1_old - SL::Y_min)*(SL::Y_max - x1_old);
 
     // Now apply the rotation to u0_old, using rotation matrices.
     // with x = u0_old and y = 0, i.e. R*[u;0] since we have the

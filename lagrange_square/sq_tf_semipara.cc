@@ -70,7 +70,7 @@ namespace SquareLagrange
   double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
                              // the default is the norm of the momentum block.
 
-  std::string Prob_str = "SqPo"; //Set from CL, a unique identifier.
+  std::string Prob_str = "SqTf"; //Set from CL, a unique identifier.
   std::string W_str = "We"; //Set from CL, e - Exact(LU), no other solver.
   std::string NS_str = "Nl"; //Set from CL, e - Exact, l - LSC
   std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
@@ -328,10 +328,10 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 
  // Create ImposeParallelOutflowElement from all elements that are
  // adjacent to the Neumann boundary.
- create_parall_outflow_lagrange_elements(po_b,
-                                         Bulk_mesh_pt,Surface_mesh_P_pt);
- //create_impenetrable_lagrange_elements(po_b,
+ //create_parall_outflow_lagrange_elements(po_b,
  //                                        Bulk_mesh_pt,Surface_mesh_P_pt);
+ create_impenetrable_lagrange_elements(2,
+                                       Bulk_mesh_pt,Surface_mesh_P_pt);
 
  // Add the two sub meshes to the problem
  add_sub_mesh(Bulk_mesh_pt);
@@ -348,7 +348,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // here.
  for(unsigned ibound=0;ibound<num_bound;ibound++)
  { 
-   if(ibound != 1)
+   if(ibound != 2)
    {
      unsigned num_nod=mesh_pt()->nboundary_node(ibound);
      for (unsigned inod=0;inod<num_nod;inod++)
@@ -383,14 +383,14 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
    nod_pt->set_value(1,0);
  }
 
- // Top boundary is slip.
- current_bound = 2;
+ // Right boundary is parallel outflow.
+ current_bound = 1;
  num_nod= mesh_pt()->nboundary_node(current_bound);
  for(unsigned inod=0;inod<num_nod;inod++)
  {
    Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
 
-   if(!nod_pt->is_on_boundary(3))
+   if(!nod_pt->is_on_boundary(0))
    {
      nod_pt->unpin(0);
      nod_pt->pin(1);
@@ -963,8 +963,8 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
 template<class ELEMENT>
 void TiltedCavityProblem<ELEMENT>::
 create_impenetrable_lagrange_elements(const unsigned &b,
-                                        Mesh* const &bulk_mesh_pt,
-                                        Mesh* const &surface_mesh_pt)
+                                      Mesh* const &bulk_mesh_pt,
+                                      Mesh* const &surface_mesh_pt)
 {
  // How many bulk elements are adjacent to boundary b?
  unsigned n_element = bulk_mesh_pt->nboundary_element(b);
@@ -997,7 +997,7 @@ create_impenetrable_lagrange_elements(const unsigned &b,
      Node* nod_pt = flux_element_pt->node_pt(j);
 
      // Is the node also on boundary 0 or 2?
-     if ((nod_pt->is_on_boundary(0))||(nod_pt->is_on_boundary(2)))
+     if ((nod_pt->is_on_boundary(1))||(nod_pt->is_on_boundary(3)))
       {
        // How many nodal values were used by the "bulk" element
        // that originally created this node?
@@ -1132,7 +1132,7 @@ int main(int argc, char* argv[])
  // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
  // straight describes the velocity flow field. Po = Parallel outflow
  // describes the boundary type.
- SL::Prob_str = "SqPo";
+ SL::Prob_str = "SqTf";
 
  // Set the strings to identify the preconditioning,
  // This is used purely for book keeping purposes.

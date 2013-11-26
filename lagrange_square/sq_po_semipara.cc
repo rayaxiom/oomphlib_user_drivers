@@ -668,6 +668,11 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
        set_hypre_ray(SL::Print_hypre);
 #endif
    }
+   else
+   {
+     pause("There is no such F AMG solver."); 
+   }
+
 
    // Set the preconditioner in the LSC preconditioner.
    ns_preconditioner_pt->set_f_preconditioner(f_preconditioner_pt);

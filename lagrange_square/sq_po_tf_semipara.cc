@@ -258,11 +258,6 @@ public:
                                             Mesh* const &bulk_mesh_pt,
                                             Mesh* const &surface_mesh_pt);
 
- void set_inflow_BC(const unsigned &b,
-                    Mesh* const &bulk_mesh_pt);
- void set_nonslip_BC(const unsigned &b,
-                     Mesh* const &bulk_mesh_pt);
-
 private:
 
  /// Pointer to the "bulk" mesh
@@ -302,7 +297,9 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  //         ----------
  //             0 non slip
  unsigned if_b=3; // inflow
- unsigned po_b=1; // Parallel Outflow.
+ unsigned tf_b=2; // tangential flow
+ unsigned po_b=1; // parallel outflow
+ unsigned bottom_b = 0; // bottom boundary, non-slip.
 
  /// Setup the mesh
  // # of elements in x-direction
@@ -325,18 +322,19 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // The constructor just creates the mesh without
  // giving it any elements, nodes, etc.
  Surface_mesh_P_pt = new Mesh;
+ Surface_mesh_T_pt = new Mesh;
 
  // Create ImposeParallelOutflowElement from all elements that are
  // adjacent to the Neumann boundary.
  create_parall_outflow_lagrange_elements(po_b,
                                          Bulk_mesh_pt,Surface_mesh_P_pt);
- //create_impenetrable_lagrange_elements(po_b,
- //                                        Bulk_mesh_pt,Surface_mesh_P_pt);
+ create_impenetrable_lagrange_elements(tf_b,
+                                       Bulk_mesh_pt,Surface_mesh_T_pt);
 
  // Add the two sub meshes to the problem
  add_sub_mesh(Bulk_mesh_pt);
  add_sub_mesh(Surface_mesh_P_pt);
- //add_sub_mesh(Surface_mesh_T_pt);
+ add_sub_mesh(Surface_mesh_T_pt);
  
  // Combine all submeshes into a single Mesh
  build_global_mesh();
@@ -348,7 +346,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // here.
  for(unsigned ibound=0;ibound<num_bound;ibound++)
  { 
-   if(ibound != 1)
+   if((ibound != 1) || (ibound != 2))
    {
      unsigned num_nod=mesh_pt()->nboundary_node(ibound);
      for (unsigned inod=0;inod<num_nod;inod++)
@@ -383,29 +381,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
    nod_pt->set_value(1,0);
  }
 
- // Top boundary is slip.
- current_bound = 2;
- num_nod= mesh_pt()->nboundary_node(current_bound);
- for(unsigned inod=0;inod<num_nod;inod++)
- {
-   Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
 
-   if(!nod_pt->is_on_boundary(3))
-   {
-     nod_pt->unpin(0);
-     nod_pt->pin(1);
-
-     nod_pt->set_value(1,0.0);
-   }
- }
-
-
- 
- //set_nonslip_BC(0,Bulk_mesh_pt);
-// set_nonslip_BC(2,Bulk_mesh_pt);
-
-// set_inflow_BC(if_b,Bulk_mesh_pt);
- 
  //Complete the problem setup to make the elements fully functional
 
  //Loop over the elements
@@ -430,10 +406,10 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  Prec_pt = prec_pt;
 
  Vector<Mesh*> mesh_pt;
- mesh_pt.resize(2);
+ mesh_pt.resize(3);
  mesh_pt[0] = Bulk_mesh_pt;
  mesh_pt[1] = Surface_mesh_P_pt;
- //meshes_pt[2] = Surface_mesh_T_pt;
+ mesh_pt[2] = Surface_mesh_T_pt;
  prec_pt->set_meshes(mesh_pt);
  
 
@@ -815,88 +791,7 @@ void TiltedCavityProblem<ELEMENT>::doc_solution()
   some_file.close();
 }
 
-//============RAYRAY===========
-/// RAYRAY
-//=======================================================================
-template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
-set_nonslip_BC(const unsigned &b,
-               Mesh* const &bulk_mesh_pt)
-{
-  unsigned num_nod = bulk_mesh_pt->nboundary_node(b);
-  unsigned dim = bulk_mesh_pt->finite_element_pt(0)->node_pt(0)->ndim();
-   
-  for(unsigned inod=0;inod<num_nod;inod++)
-   {
-    Node* nod_pt=bulk_mesh_pt->boundary_node_pt(b,inod);
-    
-    // pin all velocity components and set the value to zero.
-    for (unsigned velo_i = 0; velo_i < dim; velo_i++) 
-    {
-      nod_pt->pin(velo_i);
-      nod_pt->set_value(velo_i,0);
-    }
-   }
-}
 
-//============RAYRAY===========
-/// RAYRAY
-//=======================================================================
-template<class ELEMENT>
-void TiltedCavityProblem<ELEMENT>::
-set_inflow_BC(const unsigned &b,
-              Mesh* const &bulk_mesh_pt)
-{
-
- // Alias the namespace for convenience
- namespace SL = SquareLagrange;
-
- // Check that the dimension is correct.
-#ifdef PARANOID
-  unsigned dim = bulk_mesh_pt->finite_element_pt(0)->node_pt(0)->ndim();
-  if(dim != 2)
-   {
-     std::ostringstream err_msg;
-     err_msg << "Inflow implemented for dim = 2 only." << std::endl;
-
-     throw OomphLibError(err_msg.str(),
-                         OOMPH_CURRENT_FUNCTION,
-                         OOMPH_EXCEPTION_LOCATION);
-   }
-#endif
-
-  unsigned num_nod = bulk_mesh_pt->nboundary_node(b);
-   
-  for(unsigned inod=0;inod<num_nod;inod++)
-   {
-    Node* nod_pt=bulk_mesh_pt->boundary_node_pt(b,inod);
-
-    // Pin both velocity components
-    nod_pt->pin(0);
-    nod_pt->pin(1);
-
-    // Get the x and y cartesian coordinates.
-    double x0 = nod_pt->x(0);
-    double x1 = nod_pt->x(1);
-
-    // Tilt x1 back the coordinate so we get the original coordinate.
-    double x1_old = x0*sin(-SL::Ang) + x1*cos(-SL::Ang);
-    
-    // Now calculate the parabolic inflow at this point
-    //double u0_old = (x1_old - SL::Y_min)*(SL::Y_max - x1_old);
-    double u0_old = (x1_old - SL::Y_min)*(2.0 - x1_old);
-
-    // Now apply the rotation to u0_old, using rotation matrices.
-    // with x = u0_old and y = 0, i.e. R*[u;0] since we have the
-    // velocity in the x direction only. There is no velocity
-    // in the y direction.
-    double u0=u0_old*cos(SL::Ang);
-    double u1=u0_old*sin(SL::Ang);
-    
-    nod_pt->set_value(0,u0);
-    nod_pt->set_value(1,u1); 
-   }
-}
 
 //============start_of_create_parall_outflow_lagrange_elements===========
 /// Create ImposeParallelOutflowElement on the b-th boundary of the
@@ -938,7 +833,7 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
      Node* nod_pt = flux_element_pt->node_pt(j);
 
      // Is the node also on boundary 0 or 2?
-     if ((nod_pt->is_on_boundary(0))||(nod_pt->is_on_boundary(2)))
+     if (nod_pt->is_on_boundary(0))
       {
        // How many nodal values were used by the "bulk" element
        // that originally created this node?
@@ -982,7 +877,7 @@ create_impenetrable_lagrange_elements(const unsigned &b,
    // Build the corresponding impose_impenetrability_element
    ImposeImpenetrabilityElement<ELEMENT>* flux_element_pt = new
     ImposeImpenetrabilityElement<ELEMENT>(bulk_elem_pt,
-                                          face_index);
+                                          face_index,1);
 //   ImposeParallelOutflowElement<ELEMENT>* flux_element_pt = new
 //    ImposeParallelOutflowElement<ELEMENT>(bulk_elem_pt,
 //                                          face_index);
@@ -997,7 +892,7 @@ create_impenetrable_lagrange_elements(const unsigned &b,
      Node* nod_pt = flux_element_pt->node_pt(j);
 
      // Is the node also on boundary 0 or 2?
-     if ((nod_pt->is_on_boundary(0))||(nod_pt->is_on_boundary(2)))
+     if (nod_pt->is_on_boundary(3))
       {
        // How many nodal values were used by the "bulk" element
        // that originally created this node?

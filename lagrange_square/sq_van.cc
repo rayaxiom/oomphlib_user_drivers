@@ -411,8 +411,14 @@ template<class ELEMENT>
 void CavityProblem<ELEMENT>::doc_solution()
 {
 
+  std::cout << "Hello! I got in doc_solution!" << std::endl; 
+
+  
+  
+
   namespace SL = SquareLagrange;
   
+  std::cout << "Soln_dir is: " << SL::Soln_dir << std::endl; 
   std::ofstream some_file;
   std::stringstream filename;
   filename << SL::Soln_dir<<"/"<<SL::Label<<".dat";
@@ -475,7 +481,7 @@ int main(int argc, char* argv[])
 
 
  // Flag to output the solution.
- CommandLineArgs::specify_command_line_flag("--doc_soln");
+ CommandLineArgs::specify_command_line_flag("--doc_soln", &SL::Soln_dir);
  // Flag to output the preconditioner, used for debugging.
  CommandLineArgs::specify_command_line_flag("--doc_prec");
 
@@ -491,8 +497,6 @@ int main(int argc, char* argv[])
  CommandLineArgs::specify_command_line_flag("--itstimedir", &SL::Itstime_dir);
  
  // These are dealt with in rayheader.h
- CommandLineArgs::specify_command_line_flag("--amg_str", &RayParam::amg_strength);
- CommandLineArgs::specify_command_line_flag("--amg_damp", &RayParam::amg_damping);
 
  // Parse the above flags.
  CommandLineArgs::parse_and_assign();
@@ -792,6 +796,10 @@ int main(int argc, char* argv[])
    problem.newton_solve();
 
    //Output solution
+   std::cout << "Doc_soln: " << SL::Doc_soln << std::endl; 
+   
+   pause("hello!"); 
+   
    if(SL::Doc_soln){problem.doc_solution();}
 
   // Get the global oomph-lib communicator 

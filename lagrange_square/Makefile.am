@@ -1,12 +1,38 @@
 noinst_PROGRAMS= \
 sq_po \
 sq_tf_po \
+sq_tf \
+sq_van_po_semipara \
+sq_po_semipara \
+sq_tf_semipara \
+sq_po_tf_semipara \
 sq_van 
 
 #------------------------------------------------------------------------
 sq_po_SOURCES = sq_po.cc
 
 sq_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_tf_SOURCES = sq_tf.cc
+
+sq_tf_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_van_po_semipara_SOURCES = sq_van_po_semipara.cc
+
+sq_van_po_semipara_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_po_semipara_SOURCES = sq_po_semipara.cc
+
+sq_po_semipara_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_tf_semipara_SOURCES = sq_tf_semipara.cc
+
+sq_tf_semipara_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+#------------------------------------------------------------------------
+sq_po_tf_semipara_SOURCES = sq_po_tf_semipara.cc
+
+sq_po_tf_semipara_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
 #------------------------------------------------------------------------
 sq_tf_po_SOURCES = sq_tf_po.cc
 
