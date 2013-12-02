@@ -34,97 +34,14 @@
 #include "generic.h"
 #include "navier_stokes.h"
 
-// My own header
-#include "./../rayheader.h"
-
 // The 2D mesh
 #include "meshes/simple_rectangular_quadmesh.h"
 #include "meshes/rectangular_quadmesh.h"
 
-//using namespace std;
+// My own header
+#include "./../rayheader.h"
+
 using namespace oomph;
-
-namespace SquareLagrange
-{
-  // Domain dimenensions.
-  double Y_min = 0.0;
-  double Y_max = 1.0;
-  double X_min = 0.0;
-  double X_max = 1.0;
-  double Lx = 1.0;
-  double Ly = 1.0;
-
-  // CL - set directly from the commandline.
-  // To set from CL - a CL value is set, this is changed depending on that
-  // value.
-
-  // Set the defaults.
-  unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
-  unsigned NS_solver = 1; //CL, 0 = SuperLU, 1 - LSC
-  unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
-  unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
-  unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
-  double Ang = 30.0; //CL, Angle in degrees
-  double Rey = 100.0; //CL, Reynolds number
-  unsigned Noel = 4; //CL, Number of elements in 1D
-  double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
-                             // the default is the norm of the momentum block.
-
-  std::string Prob_str = "SqPo"; //Set from CL, a unique identifier.
-  std::string W_str = "We"; //Set from CL, e - Exact(LU), no other solver.
-  std::string NS_str = "Nl"; //Set from CL, e - Exact, l - LSC
-  std::string F_str = "Fe"; //Set from CL, e - Exact, a - AMG
-  std::string P_str = "Pe"; //Set from CL, e - Exact, a - AMG
-  std::string Vis_str = "Sim"; //Set from CL, Sim - Simple, Str = Stress Diver.
-  std::string Ang_str = "A30"; //Set from CL, angle of rotation about the z axis
-  std::string Rey_str = "R100"; //Set from CL, Reynolds number
-  std::string Noel_str = "N4"; //Set from CL, Number of elements in 1D
-  std::string Sigma_str = ""; //Set from CL, sigma being used. is norm, then is
-                              // null.
-  std::string W_approx_str=""; //Set from CL, use diagonal approximation for W
-                               // block?
-  bool Use_axnorm = true; //Set from CL, use norm for sigma?
-  bool Use_diagonal_w_block = true; // To set from CL
-  bool Doc_prec = false; // To set from CL
-  bool Doc_soln = false; // To set from CL
-  bool Print_hypre = true;
-
-  std::string Label = ""; // To be set as the label for this problem. Contains
-                          // all the information for this run.
-  std::string Soln_dir = ""; // Where to put the solution.
-  std::string Doc_prec_dir = ""; // Where to put the solution.
-
-  std::string Itstime_dir = ""; //Set from CL, directory to output the 
-                                // iteration counts and timing results.
-
-  // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
-  // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
-  // using OOMPH-LIB's GMRES even if we have Trilinos. This should be set in
-  // the problem constuctor as soon as we set the linear_solver_pt() for the
-  // problem.
-  bool Using_trilinos_solver = false;
-
-  double Rey_start = 0.0;
-  double Rey_incre = 50.0;
-  double Rey_end = 500.0;
-
-  // Object to store the linear solver iterations and times.
-  DocLinearSolverInfo* Doc_linear_solver_info_pt;
-
-  double f_amg_strength = -1.0;
-  double f_amg_damping = -1.0;
-  int f_amg_coarsening = -1;
-  int f_amg_smoother = -1;
-  int f_amg_iterations = -1;
-  int f_amg_smoother_iterations = -1;
-  
-  double p_amg_strength = -1.0;
-  double p_amg_damping = -1.0;
-  int p_amg_coarsening = -1;
-  int p_amg_smoother = -1;
-  int p_amg_iterations = -1;
-  int p_amg_smoother_iterations = -1;
-}
 
 namespace oomph
 {
@@ -226,8 +143,6 @@ public:
 
    // Get the preconditioner setup time.
    
-
-
    // Set the solver time.
    if(SquareLagrange::Using_trilinos_solver)
    {
@@ -242,6 +157,20 @@ public:
 
    Doc_linear_solver_info_pt->add_iteration_and_time
      (iters,preconditioner_setup_time,solver_time);
+ }
+
+ void delete_flux_elements(Mesh* const &surface_mesh_pt);
+
+ void actions_before_distribute()
+ {
+    delete_flux_elements(Surface_mesh_P_pt);
+    rebuild_global_mesh();
+ }
+
+ void actions_after_distribute()
+ {
+   create_parall_outflow_lagrange_elements(1,Bulk_mesh_pt,Surface_mesh_P_pt);
+   rebuild_global_mesh();
  }
 
  /// Doc the solution
@@ -331,7 +260,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  create_parall_outflow_lagrange_elements(po_b,
                                          Bulk_mesh_pt,Surface_mesh_P_pt);
  //create_impenetrable_lagrange_elements(po_b,
- //                                        Bulk_mesh_pt,Surface_mesh_P_pt);
+ //                                      Bulk_mesh_pt,Surface_mesh_P_pt);
 
  // Add the two sub meshes to the problem
  add_sub_mesh(Bulk_mesh_pt);
@@ -358,6 +287,10 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 
        nod_pt->pin(0);
        nod_pt->pin(1);
+       
+       nod_pt->set_value(0,0);
+       nod_pt->set_value(1,0);
+
      }
    }
  }
@@ -374,30 +307,47 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  for(unsigned inod=0;inod<num_nod;inod++)
  {
    Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
+
+   // Pin both velocity components
+   nod_pt->pin(0);
+   nod_pt->pin(1);
+
+   // Get the x and y cartesian coordinates
+   double x0=nod_pt->x(0);
    double x1=nod_pt->x(1);
 
-   double u=(x1-0.0)*(2.0-x1);
+   // Tilt x1 by -SL::Ang, this will give us the original coordinate.
+   double x1_old = x0*sin(-SL::Ang) + x1*cos(-SL::Ang);
 
+   // Now calculate the parabolic inflow at this point.
+   double u0_old = (x1_old - SL::Y_min)*(SL::Y_max - x1_old);
+   
+   // Now apply the rotation to u0_old, using rotation matrices.
+   // with x = u0_old and y = 0, i.e. R*[u;0] since we have the
+   // velocity in the x direction only. There is no velocity
+   // in the y direction.
+   double u0=u0_old*cos(SL::Ang);
+   double u1=u0_old*sin(SL::Ang);
 
-   nod_pt->set_value(0,u);
-   nod_pt->set_value(1,0);
+   nod_pt->set_value(0,u0);
+   nod_pt->set_value(1,u1);
  }
 
- // Top boundary is slip.
- current_bound = 2;
- num_nod= mesh_pt()->nboundary_node(current_bound);
- for(unsigned inod=0;inod<num_nod;inod++)
- {
-   Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
-
-   if(!nod_pt->is_on_boundary(3))
-   {
-     nod_pt->unpin(0);
-     nod_pt->pin(1);
-
-     nod_pt->set_value(1,0.0);
-   }
- }
+// // Top boundary is slip.
+// current_bound = 2;
+// num_nod= mesh_pt()->nboundary_node(current_bound);
+// for(unsigned inod=0;inod<num_nod;inod++)
+// {
+//   Node* nod_pt=mesh_pt()->boundary_node_pt(current_bound,inod);
+//
+//   if(!nod_pt->is_on_boundary(3))
+//   {
+//     nod_pt->unpin(0);
+//     nod_pt->pin(1);
+//
+//     nod_pt->set_value(1,0.0);
+//   }
+// }
 
 
  
@@ -646,6 +596,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
      RayGlobalAMGParam::amg_smoother = SL::f_amg_smoother;
      RayGlobalAMGParam::amg_iterations = SL::f_amg_iterations;
      RayGlobalAMGParam::amg_smoother_iterations = SL::f_amg_smoother_iterations;
+     RayGlobalAMGParam::print_hypre = SL::Print_hypre;
 
 
      // Different amg strength for simple/stress divergence for viscuous term.
@@ -665,7 +616,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
      
      // Setup the preconditioner.
      f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
-       set_hypre_ray(SL::Print_hypre);
+       set_hypre_ray();
 #endif
    }
 
@@ -700,6 +651,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
      RayGlobalAMGParam::amg_strength = SL::p_amg_strength;
      //RayGlobalAMGParam::amg_damping = SL::p_amg_damping;
      RayGlobalAMGParam::amg_coarsening = SL::p_amg_coarsening;
+     RayGlobalAMGParam::print_hypre = SL::Print_hypre;
 
 //     std::cout << "p_amg_iterations:" << SL::p_amg_iterations << std::endl; 
 //     std::cout << "p_amg_smoother_iterations" << SL::p_amg_smoother_iterations << std::endl; 
@@ -707,7 +659,7 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
 //     std::cout << "p_amg_coarsening" << SL::p_amg_coarsening << std::endl; 
 // */
 
-     p_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::set_hypre_ray(SL::Print_hypre);
+     p_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::set_hypre_ray();
 
      ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
 #endif
@@ -752,13 +704,13 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  // Set the doc info for book keeping purposes.
  prec_pt->set_doc_linear_solver_info_pt(SL::Doc_linear_solver_info_pt);
 
- if(SL::Use_diagonal_w_block)
+ if(SL::Use_block_diagonal_w)
  {
-   prec_pt->use_diagonal_w_block();
+   prec_pt->use_block_diagonal_w_block();
  }
  else
  {
-   prec_pt->use_block_diagonal_w_block();
+   prec_pt->use_diagonal_w_block();
  }
 
  if(SL::Doc_prec)
@@ -772,18 +724,18 @@ TiltedCavityProblem<ELEMENT>::TiltedCavityProblem()
  prec_pt->set_doc_prec_directory_pt(&SL::Doc_prec_dir);
 
  // Build solve and preconditioner
-//#ifdef OOMPH_HAS_TRILINOS
-// TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
-// trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
-// Solver_pt = trilinos_solver_pt;
-// SL::Using_trilinos_solver = true;
-//#else
+#ifdef OOMPH_HAS_TRILINOS
+ TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
+ trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
+ Solver_pt = trilinos_solver_pt;
+ SL::Using_trilinos_solver = true;
+#else
  Solver_pt = new GMRES<CRDoubleMatrix>;
  // We use RHS preconditioning. Note that by default,
  // left hand preconditioning is used.
  static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
  SL::Using_trilinos_solver = false;
-//#endif
+#endif
 
  Solver_pt->tolerance() = 1.0e-6;
  this->newton_solver_tolerance() = 1.0e-6;
@@ -897,6 +849,26 @@ set_inflow_BC(const unsigned &b,
     nod_pt->set_value(1,u1); 
    }
 }
+
+
+template<class ELEMENT>
+void TiltedCavityProblem<ELEMENT>::
+delete_flux_elements(Mesh* const &surface_mesh_pt)
+{
+  // How many surface elements are there in the mesh?
+  unsigned n_element = surface_mesh_pt->nelement();
+
+  // Loop over the surface elements
+  for(unsigned e=0;e<n_element;e++)
+  {
+    // Kill surface elements
+    delete surface_mesh_pt->element_pt(e);
+  }
+
+  // Wipe the mesh
+  surface_mesh_pt->flush_element_and_node_storage();
+} //  end of delete_flux_elements
+
 
 //============start_of_create_parall_outflow_lagrange_elements===========
 /// Create ImposeParallelOutflowElement on the b-th boundary of the
@@ -1015,31 +987,6 @@ create_impenetrable_lagrange_elements(const unsigned &b,
 }
 
 
-
-int str2int(const std::string &str)
-{
-  std::stringstream ss(str);
-  int n;
-  ss >> n;
-  return n;
-}
-
-unsigned str2unsigned(const std::string &str)
-{
-  std::stringstream ss(str);
-  unsigned n;
-  ss >> n;
-  return n;
-}
-
-double str2double(const std::string &str)
-{
-  std::stringstream ss(str);
-  double n;
-  ss >> n;
-  return n;
-}
-
 //===start_of_main======================================================
 /// Driver code
 //======================================================================
@@ -1058,26 +1005,30 @@ int main(int argc, char* argv[])
  
  SL::Doc_linear_solver_info_pt = &doc_linear_solver_info;
 
- SL::Soln_dir = "RESLT";
+ // RAYRAY DO THIS SL::Soln_dir = "RESLT";
 
- SL::Doc_prec_dir = "rawdata";
+ // RAYRAY DO THIS SL::Doc_prec_dir = "rawdata";
 
  // Store commandline arguments
  CommandLineArgs::setup(argc,argv);
 
+ CommandLineArgs::specify_command_line_flag("--dist_prob");
 
  // Flag to output the solution.
  CommandLineArgs::specify_command_line_flag("--doc_soln", &SL::Soln_dir);
  // Flag to output the preconditioner, used for debugging.
- CommandLineArgs::specify_command_line_flag("--doc_prec", 
-                                            &SL::Doc_prec_dir);
+ CommandLineArgs::specify_command_line_flag("--doc_prec", &SL::Doc_prec_dir);
+ 
+ // A problem ID, there are eight different types of problems.
+ // Check the header file.
+ CommandLineArgs::specify_command_line_flag("--prob_id",&SL::Prob_id);
 
  CommandLineArgs::specify_command_line_flag("--w_solver", &SL::W_solver);
  CommandLineArgs::specify_command_line_flag("--ns_solver", &SL::NS_solver);
  CommandLineArgs::specify_command_line_flag("--p_solver", &SL::P_solver);
  CommandLineArgs::specify_command_line_flag("--f_solver", &SL::F_solver);
  CommandLineArgs::specify_command_line_flag("--visc", &SL::Vis);
- CommandLineArgs::specify_command_line_flag("--ang", &SL::Ang);
+ CommandLineArgs::specify_command_line_flag("--ang", &SL::Ang_deg);
  CommandLineArgs::specify_command_line_flag("--rey", &SL::Rey);
  CommandLineArgs::specify_command_line_flag("--rey_start", &SL::Rey_start);
  CommandLineArgs::specify_command_line_flag("--rey_incre", &SL::Rey_incre);
@@ -1115,172 +1066,109 @@ int main(int argc, char* argv[])
  // Now set up the flags/parameters for the problem//
  ////////////////////////////////////////////////////
  
+ // Do we have to distribute the problem?
+ if(CommandLineArgs::command_line_flag_has_been_set("--dist_prob"))
+ {
+   SL::Distribute_problem = true;
+ }
+ else
+ {
+   SL::Distribute_problem = false;
+ }
+
  // Document the solution? Default is false.
  if(CommandLineArgs::command_line_flag_has_been_set("--doc_soln"))
  {
-   SL::Doc_soln = true;
+   // The argument immediately after --doc_soln is put into SL::Soln_dir.
+   // If this begins with "--", then no solution directory has been provided.
+   std::size_t found = SL::Soln_dir.find("--");
+   
+   // Check if they have set the solution directory.
+   if(found != std::string::npos)
+   {
+     std::ostringstream err_msg;
+     err_msg << "Please provide the doc_soln directory "
+             << "after the argument --doc_soln.\n" 
+             << "This must not start with \"--\"." << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+   else
+   {
+     SL::Doc_soln = true;
+   }
  }
 
  // Document the preconditioner? Default is false.
  if(CommandLineArgs::command_line_flag_has_been_set("--doc_prec"))
  {
-   SL::Doc_prec = true;
+   // The argument immediately after --doc_prec is put into SL::Doc_prec_dir.
+   // If this begins with "--", then no prec directory has been provided.
+   std::size_t found = SL::Doc_prec_dir.find("--");
+
+   // Check if they have set the doc_prec directory.
+   if(found != std::string::npos)
+   {
+     std::ostringstream err_msg;
+     err_msg << "Please provide the doc_prec directory "
+             << "after the argument --doc_prec.\n" 
+             << "This must not start with \"--\"." << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
+   else
+   {
+     SL::Doc_prec = true;
+   }
+ }
+
+ // Set a problem id to identify the problem.
+ // This is used for book keeping purposes.
+ if(CommandLineArgs::command_line_flag_has_been_set("--prob_id"))
+ {
+   // The argument immediately after --prob_id is put into SL::Prob_id.
+   // If this begins with "--", then no problem id has been provided.
+
+   // Maybe I should check if SL::Prob_id is a number or a string...
+
+   // We only accept problem IDs as defined below.
+   // Creating a set of acceptable IDs
+   int prob_id_array[]= {10,11,12,13,
+                         20,21,22,23};
+
+   bool inset = check_if_in_set<int>(prob_id_array,8,SL::Prob_id);
+
+   // Check if they have provided an acceptable ID.
+   // If a new element has been inserted, it means the user has provided an
+   // ID not in the set.
+   if(inset == true)
+   {
+     std::ostringstream err_msg;
+     err_msg << "Please provide a problem id to identify the problem after "
+             << "after the argument --prob_id.\n" 
+             << "Acceptable IDs are:\n"
+             << "10 = (SqTmp) Square, custom stuff...\n"
+             << "11 = (SqPo) Square, Parallel outflow (para inflow)\n"
+             << "12 = (SqTf) Square, Tangential flow (Semi para inflow)\n"
+             << "13 = (SqTfPo) Square, Tangential flow, Parallel outflow (semi para inflow)\n"
+             << "\n"
+             << "20 = (AwTmp) Annulus wedge, custom stuff...\n"
+             << "21 = (AwPo) Annulus wedge, Parallel outflow (para inflow)\n"
+             << "22 = (AwTf) Annulus wedge, Tangential flow (semi para inflow)\n"
+             << "23 = (AwTfPo) Annulus wedge, Tan. flow, Para. outflow (semi para inflow)\n"
+             << std::endl;
+
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
+   }
  }
 
 
- // Set a string to identify the problem. This is unique to each problem,
- // so we hard code this. 2DStrPo = 2 dimension, straight parallel outflow.
- // straight describes the velocity flow field. Po = Parallel outflow
- // describes the boundary type.
- SL::Prob_str = "SqPo";
-
- // Set the strings to identify the preconditioning,
- // This is used purely for book keeping purposes.
- 
- // Default: W_solver = 0, W_str = We
- if(CommandLineArgs::command_line_flag_has_been_set("--w_solver"))
- {
-  switch(SL::W_solver)
-  {
-    case 0:
-      SL::W_str = "We";
-      break;
-    case 1:
-    {
-      pause("No other W block solver coded."); 
-      SL::W_str = "Wa";
-    }
-      break;
-    default:
-      std::cout << "Do not recognise W: " << SL::W_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = 1\n"
-                << "Using default: Exact (W_solver = 0)"<< std::endl;
-  }  // switch
- } // if
-
- // Default: NS_solver = 1, NS_str = Nl
- if(CommandLineArgs::command_line_flag_has_been_set("--ns_solver"))
- {
-  switch(SL::NS_solver)
-  {
-    case 0:
-      SL::NS_str = "Ne";
-      SL::P_str = "";
-      SL::F_str = "";
-      break;
-    case 1:
-      SL::NS_str = "Nl";
-      break;
-    default:
-      std::cout << "Do not recognise NS: " << SL::NS_solver << "\n"
-                << "Exact solve = 0\n"
-                << "LSC = 1\n"
-                << "Using default: LSC for NS block (NS_solver = 1)"<<std::endl;
-  }  // switch
- } // if
-
- // Default: This can only be set if NS_solver != 0 i.e. we are using LSC for 
- // the NS block
- // Default: P_solver = 0, P_str = Pe
- if(CommandLineArgs::command_line_flag_has_been_set("--p_solver"))
- {
-  if(SL::NS_solver == 0)
-  {
-    pause("NS solve is exact. There cannot be a P solver.");
-  }
-
-  switch(SL::P_solver)
-  {
-    case 0:
-      SL::P_str = "Pe";
-      break;
-    case 1:
-      SL::P_str = "Pa";
-      break;
-    case 96:
-      SL::P_str = "Pray";
-      break;
-    default:
-      std::cout << "Do not recognise P: " << SL::P_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = 1\n"
-                << "Using default: Exact P solve (P_solver = 0)"<< std::endl;
-  }  // switch
- } // if
-
- // This can only be set if we're using LSC for the NS block.
- // Default: 0, Fe
- if(CommandLineArgs::command_line_flag_has_been_set("--f_solver"))
- {
-  if(SL::NS_solver == 0)
-  {
-    pause("NS solve is exact. There cannot be an F solver.");
-  }
-
-  switch(SL::F_solver)
-  {
-    case 0:
-      SL::F_str = "Fe";
-      break;
-    case 69:
-      SL::F_str = "Fa";
-      break;
-    case 96:
-      SL::F_str = "Fray";
-      break;
-    case 11:
-      SL::F_str = "Fh2dp";
-      break;
-    case 12:
-      SL::F_str = "Fhns";
-      break;
-    case 13:
-      SL::F_str = "CLJPGSStrn075";
-      break;
-    case 14:
-      SL::F_str = "FRSGSStrn075";
-      break;
-    case 15:
-      SL::F_str = "FCLJPPilutStrn075";
-      break;
-    case 16:
-      SL::F_str = "FRSPilutStrn075";
-      break;
-    case 17:
-      SL::F_str = "Fray_old"; // I have no short hand for this...
-      break;
-    case 81:
-      SL::F_str = "CLJPGSStrn0668";
-      break;
-    case 82:
-      SL::F_str = "CLJPJStrn0668";
-      break;
-    case 83:
-      SL::F_str = "CLJPPilutStrn0668";
-      break;
-    case 84:
-      SL::F_str = "RSGSStrn0668";
-      break;
-    case 85:
-      SL::F_str = "RSJStrn0668";
-      break;
-    case 86:
-      SL::F_str = "RSPilutStrn0668";
-      break;
-    case 2:
-      SL::F_str = "Fde";
-      break;
-    case 3:
-      SL::F_str = "Fda";
-      break;
-    default:
-      std::cout << "Do not recognise F: " << SL::F_solver << "\n"
-                << "Exact preconditioning = 0\n"
-                << "AMG = xxx Look in the code...\n"
-                << "Using default: Exact F solve (F_solver = 0)"<< std::endl;
-  }  // switch
- } // if
  
  // Set the viscuous term.
  // Default: 0, Sim
@@ -1288,92 +1176,80 @@ int main(int argc, char* argv[])
  {
    if (SL::Vis == 0)
    {
-     SL::Vis_str = "Sim";
      NavierStokesEquations<2>::Gamma[0]=0.0;
      NavierStokesEquations<2>::Gamma[1]=0.0;
 
    }
    else if (SL::Vis == 1)
    {
-     SL::Vis_str = "Str";
      NavierStokesEquations<2>::Gamma[0]=1.0;
      NavierStokesEquations<2>::Gamma[1]=1.0;
    } // else - setting viscuous term.
    else
    {
-     std::cout << "There is no such Viscous term, using 0 = simple." 
-               << std::endl; 
+     std::ostringstream err_msg;
+     err_msg << "Do not recognise viscuous term: " << SL::Vis << ".\n"
+             << "Vis = 0 for simple form\n"
+             << "Vis = 1 for stress divergence form\n"
+             << std::endl;
+     throw OomphLibError(err_msg.str(),
+                         OOMPH_CURRENT_FUNCTION,
+                         OOMPH_EXCEPTION_LOCATION);
    }
  }
 
- // Set Ang_str
- // Default: A30
- if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
- {
-   std::ostringstream strs;
-   strs << "A" << SL::Ang;
-   SL::Ang_str = strs.str();
- }
+
+
 
  // Now we need to convert Ang into radians.
- SL::Ang = SL::Ang * (MathematicalConstants::Pi / 180.0);
+ SL::Ang = SL::Ang_deg * (MathematicalConstants::Pi / 180.0);
 
- // Set Noel_str, used for book keeping.
- if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
+ // Check if the Reynolds numbers have been set.
+ if(  CommandLineArgs::command_line_flag_has_been_set("--rey_start")
+    &&CommandLineArgs::command_line_flag_has_been_set("--rey_incre")
+    &&CommandLineArgs::command_line_flag_has_been_set("--rey_end")
+    &&CommandLineArgs::command_line_flag_has_been_set("--rey"))
  {
-   std::ostringstream strs;
-   strs << "N" << SL::Noel;
-   SL::Noel_str = strs.str();
+   std::ostringstream err_msg;
+   err_msg << "You have set all --rey* argument, please choose carefully!\n"
+           << std::endl;
+   throw OomphLibError(err_msg.str(),
+                       OOMPH_CURRENT_FUNCTION,
+                       OOMPH_EXCEPTION_LOCATION);
+ }
+ else if(  CommandLineArgs::command_line_flag_has_been_set("--rey_start")
+    &&CommandLineArgs::command_line_flag_has_been_set("--rey_incre")
+    &&CommandLineArgs::command_line_flag_has_been_set("--rey_end"))
+ {
+   std::cout << "Looping Reynolds: \n"
+             << "Rey_start = " << SL::Rey_start << std::endl; 
+   std::cout << "Rey_incre = " << SL::Rey_incre << std::endl; 
+   std::cout << "Rey_end = " << SL::Rey_end << std::endl; 
+ }
+ else if(!CommandLineArgs::command_line_flag_has_been_set("--rey"))
+ {
+   std::ostringstream err_msg;
+   err_msg << "No Reynolds numbers have been set.\n"
+           << "For a single Reynolds number, use --rey.\n"
+           << "For looping through Reynolds numbers, use:\n"
+           << "--rey_start --rey_incre --rey_end.\n"
+           << std::endl;
+   throw OomphLibError(err_msg.str(),
+                       OOMPH_CURRENT_FUNCTION,
+                       OOMPH_EXCEPTION_LOCATION);
  }
 
- // Set Use_axnorm, if sigma has not been set, norm os momentum block is used.
- if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
- {
-   SL::Use_axnorm = false;
-
-   std::ostringstream strs;
-   strs << "S" << SL::Scaling_sigma;
-   SL::Sigma_str = strs.str();
- }
-
- // use the diagonal or block diagonal approximation for W block.
- if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
- {
-   SL::Use_diagonal_w_block = false;
-   SL::W_approx_str = "bdw";
- }
- else
- {
-   SL::Use_diagonal_w_block = true;
-   SL::W_approx_str = "";
- }
-
+ 
  // Solve with Taylor-Hood element, set up problem
- // Set Rey_str, used for book keeping.
- if(CommandLineArgs::command_line_flag_has_been_set("--rey"))
- {
-   if(SL::Rey >= 0)
-   {
-     std::ostringstream strs;
-     strs << "R" << SL::Rey;
-     SL::Rey_str = strs.str();
-   }
-   else
-   {
-     std::cout << "Looping Reynolds" << std::endl; 
-     std::cout << "Rey_start: " << SL::Rey_start << std::endl; 
-     std::cout << "Rey_incre: " << SL::Rey_incre << std::endl; 
-     std::cout << "Rey_end: " << SL::Rey_end << std::endl; 
-   }
- }
-
  TiltedCavityProblem< QTaylorHoodElement<2> > problem;
 
 
-///////////////////////////////////////////////////////////////////////////////
+ //////////////////////////////////////////////////////////////////////////////
 
- if(SL::Rey < 0)
+ if(!CommandLineArgs::command_line_flag_has_been_set("--rey"))
  {
+   pause("Hi mah!"); 
+   
    unsigned rey_increment = 0;
 
    for (SL::Rey = SL::Rey_start; 
@@ -1381,13 +1257,10 @@ int main(int argc, char* argv[])
    {
      std::ostringstream strs;
      strs << "R" << SL::Rey;
-     SL::Rey_str = strs.str();
+//     SL::Rey_str = strs.str(); RAY RAY FIX THIS
 
      // Setup the label. Used for doc solution and preconditioner.
-     SL::Label = SL::Prob_str
-                 + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-                 + SL::Vis_str + SL::Ang_str + SL::Rey_str
-                 + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
+     SL::Label = SL::create_label();
 
      time_t rawtime;
      time(&rawtime);
@@ -1477,7 +1350,7 @@ int main(int argc, char* argv[])
      // New timestep:
      outfile << "RAYPRECSETUP:\t" << rey_increment << "\t";
      std::cout << "RAYPRECSETUP:\t" << rey_increment << "\t";
-     // Loop through the Newtom Steps
+     // Loop through the Newton Steps
      unsigned nnewtonstep = iters_times[rey_increment].size();
      double sum_of_newtonstep_times = 0;
      for(unsigned innewtonstep = 0; innewtonstep < nnewtonstep;
@@ -1525,49 +1398,45 @@ int main(int argc, char* argv[])
 
   rey_increment++;
 
-
-
-
-
    }
  }
  else
  {
    // Setup the label. Used for doc solution and preconditioner.
-   SL::Label = SL::Prob_str
-               + SL::W_str + SL::NS_str + SL::F_str + SL::P_str
-               + SL::Vis_str + SL::Ang_str + SL::Rey_str
-               + SL::Noel_str + SL::W_approx_str + SL::Sigma_str;
+   SL::Label = SL::create_label();
 
    time_t rawtime;
    time(&rawtime);
 
    std::cout << "RAYDOING: "
-     << SL::Label
-     << " on " << ctime(&rawtime) << std::endl;
+             << SL::Label
+             << " on " << ctime(&rawtime) << std::endl;
+    
+    problem.distribute();
+     
+    // Solve the problem
+    problem.newton_solve();
 
-   // Solve the problem
-   problem.newton_solve();
+     
 
-   //Output solution
-   if(SL::Doc_soln){problem.doc_solution();}
-   
-  // Get the global oomph-lib communicator 
-  const OomphCommunicator* const comm_pt = MPI_Helpers::communicator_pt();
+    //Output solution
+    if(SL::Doc_soln){problem.doc_solution();}
+    
+    // Get the global oomph-lib communicator 
+    const OomphCommunicator* const comm_pt = MPI_Helpers::communicator_pt();
 
-  // my rank and number of processors. This is used later for putting the data.
-  unsigned my_rank = comm_pt->my_rank();
+    // my rank and number of processors. This is used later for putting the data.
+    unsigned my_rank = comm_pt->my_rank();
   
-  // Output the iteration counts and times if my_rank == 0
-  if(CommandLineArgs::command_line_flag_has_been_set("--itstimedir") 
-     && (my_rank == 0))
-  {
-   
-   // Create the File...
-   std::ostringstream filename_stream;
-   filename_stream << SL::Itstime_dir<<"/"<<SL::Label;
-   std::ofstream outfile;
-   outfile.open(filename_stream.str().c_str());
+    // Output the iteration counts and times if my_rank == 0
+    if(CommandLineArgs::command_line_flag_has_been_set("--itstimedir") 
+       && (my_rank == 0))
+    {
+     // Create the File...
+     std::ostringstream filename_stream;
+     filename_stream << SL::Itstime_dir<<"/"<<SL::Label;
+     std::ofstream outfile;
+     outfile.open(filename_stream.str().c_str());
 
    // We now output the iteration and time.
    Vector<Vector<Vector<double> > > iters_times
