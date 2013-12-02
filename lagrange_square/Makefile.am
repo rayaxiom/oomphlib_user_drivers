@@ -1,5 +1,5 @@
 noinst_PROGRAMS= \
-sq_po \
+sq_lgr \
 sq_tf_po \
 sq_tf \
 sq_van_po_semipara \
@@ -9,9 +9,9 @@ sq_po_tf_semipara \
 sq_van 
 
 #------------------------------------------------------------------------
-sq_po_SOURCES = sq_po.cc
+sq_lgr_SOURCES = sq_lgr.cc
 
-sq_po_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+sq_lgr_LDADD = -L@libdir@ -lnavier_stokes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 #------------------------------------------------------------------------
 sq_tf_SOURCES = sq_tf.cc
 
