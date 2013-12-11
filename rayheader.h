@@ -1449,9 +1449,489 @@ namespace SquareLagrange
     return label; 
   } // inlined function create_label
 
+} // Namespace SquareLagrange
+
+namespace CubeLagrange
+{
+  bool Distribute_problem = false;
+
+  ///////////////////////
+  // Domain dimensions.//
+  /////////////////////// 
+  //
+  // This is a unit cube: x,y,z \in [0,1]  
+  //
+
+  // Min and max x, y and z values respectively.
+  double X_min = 0.0;
+  double X_max = 1.0;
+  double Y_min = 0.0;
+  double Y_max = 1.0;
+  double Z_min = 0.0;
+  double Z_max = 1.0;
+  
+  // Length in the x, y and z direction respectively.
+  double Lx = X_max - X_min;
+  double Ly = Y_max - Y_min;
+  double Lz = Z_max - Z_min;
+  
+  /////////////////////////////////////////////////////////////////////////////
+
+  // CL - set directly from the command line.
+  // To set from CL - a CL value is set, this is changed depending on that
+  // value.
+  //
+  // Problem parameter overview:
+  //
+  // // Solvers:
+  //
+  //
+  // F_ns + L^T inv(W) L | B^T
+  // --------------------------
+  //                     | W
+  //
+  // W = 0 (SuperLU)
+  // NS_solver = 0 (SuperLU) or 1 (LSC)
+  // 
+  // If NS_solver = 1, then we have:
+  //
+  // | F | B^T |   |
+  // |----------   |
+  // |   |-M_s |   |
+  // |-------------|
+  // |         | W |
+  //
+  // F_solver = 0 (SuperLU) or 1 (AMG)
+  // P_solver = 0 (SuperLU) or 1 (AMG)
+  // 
+
+  // Default configuration
+  unsigned W_solver = 0; //CL, 0 = SuperLU, no other W solver coded.
+  unsigned NS_solver = 1; //CL, 0 = SuperLU, 1 - LSC
+  unsigned F_solver = 0; //CL, 0 - SuperLU, 1 - AMG
+  unsigned P_solver = 0; //CL, 0 - SuperLU, 1 - AMG
+
+  // All problems based on the cube domain will be in the same file.
+  // Each unique problem will have an id.
+  // 00 = (CuTmp) Square, custom stuff...
+  // 01 = (CuPo) Square, Parallel outflow (para inflow) 
+  // 02 = (CuTf) Square, Tangential flow (Semi para inflow)
+  // 03 = (CuTfPo) Square, Tangential flow, Parallel outflow (semi para inflow)
+
+  int Prob_id = -1;
+
+  // These are self explanatory:
+  unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
+  double Angx_deg = 30.0; //CL, Angle in degrees
+  double Angy_deg = 30.0; //CL, Angle in degrees
+  double Angz_deg = 30.0; //CL, Angle in degrees
+  double Angx = 0.0; //CL, Angle in degrees
+  double Angy = 0.0; //CL, Angle in degrees
+  double Angz = 0.0; //CL, Angle in degrees
+  double Rey = 100.0; //CL, Reynolds number
+  unsigned Noelx = 4; //CL, Number of elements in 1D
+  unsigned Noely = 4; //CL, Number of elements in 1D
+  unsigned Noelz = 4; //CL, Number of elements in 1D
+  double Scaling_sigma = 0; //CL, If the scaling sigma is not set, then
+                            // the default is the norm of the momentum block. 
+  
+  // These are strings for 
+  bool Use_axnorm = true; //Set from CL, use norm for sigma?
+  bool Use_block_diagonal_w = false; // To set from CL
+  bool Doc_prec = false; // To set from CL
+  bool Doc_soln = false; // To set from CL
+  bool Print_hypre = true;
+
+  std::string Label = ""; // To be set as the label for this problem. Contains
+                          // all the information for this run.
+  std::string Soln_dir = ""; // Where to put the solution.
+  std::string Doc_prec_dir = ""; // Where to put the solution.
+
+  std::string Itstime_dir = ""; //Set from CL, directory to output the 
+                                // iteration counts and timing results.
+
+  // Used to determine if we are using the TrilinosAztecOOSolver solver or not.
+  // This cannot be determined by the OOMPH_HAS_TRILINOS ifdef since we may be
+  // using OOMPH-LIB's GMRES even if we have Trilinos. This should be set in
+  // the problem constuctor as soon as we set the linear_solver_pt() for the
+  // problem.
+  bool Using_trilinos_solver = false;
+
+  double Rey_start = 0.0;
+  double Rey_incre = 50.0;
+  double Rey_end = 500.0;
+
+  // Object to store the linear solver iterations and times.
+  DocLinearSolverInfo* Doc_linear_solver_info_pt;
+
+  double f_amg_strength = -1.0;
+  double f_amg_damping = -1.0;
+  int f_amg_coarsening = -1;
+  int f_amg_smoother = -1;
+  int f_amg_iterations = -1;
+  int f_amg_smoother_iterations = -1;
+  
+  double p_amg_strength = -1.0;
+  double p_amg_damping = -1.0;
+  int p_amg_coarsening = -1;
+  int p_amg_smoother = -1;
+  int p_amg_iterations = -1;
+  int p_amg_smoother_iterations = -1;
+
+  string create_label();
+
+  inline string create_label()
+  {
+//    std::string prob_str = "";
+//    std::string w_str = "";
+//    std::string ns_str = "";
+//    std::string f_str = "";
+//    std::string p_str = "";
+//    std::string vis_str = "";
+//    std::string ang_str = "";
+//    std::string rey_str = "";
+//    std::string noel_str = "";
+//    std::string w_approx_str = "";
+//    std::string sigma_str = "";
+//
+//    switch(Prob_id)
+//    {
+//      case 10:
+//        prob_str = "SqTmp";
+//        break;
+//      case 11:
+//        prob_str = "SqPo";
+//        break;
+//      case 12:
+//        prob_str = "SqTf";
+//        break;
+//      case 13:
+//        prob_str = "SqTfPo";
+//        break;
+//      case 20:
+//        prob_str = "AwTmp";
+//        break;
+//      case 21:
+//        prob_str = "AwPo";
+//        break;
+//      case 22:
+//        prob_str = "AwTf";
+//        break;
+//      case 23:
+//        prob_str = "AwTfPo";
+//        break;
+//      default:
+//        {
+//          std::ostringstream err_msg;
+//          err_msg << "There is an unrecognised Prob_id, recognised Prob_id:\n"
+//                  << "10 = (SqTmp) Square, custom stuff...\n"
+//                  << "11 = (SqPo) Square, Parallel outflow (para inflow)\n"
+//                  << "12 = (SqTf) Square, Tangential flow (Semi para inflow)\n"
+//                  << "13 = (SqTfPo) Square, Tangential flow, Parallel outflow (semi para inflow)\n"
+//                  << "\n"
+//                  << "20 = (AwTmp) Annulus wedge, custom stuff...\n"
+//                  << "21 = (AwPo) Annulus wedge, Parallel outflow (para inflow)\n"
+//                  << "22 = (AwTf) Annulus wedge, Tangential flow (semi para inflow)\n"
+//                  << "23 = (AwTfPo) Annulus wedge, Tan. flow, Para. outflow (semi para inflow)\n"
+//                  << std::endl;
+//          throw OomphLibError(err_msg.str(),
+//                              OOMPH_CURRENT_FUNCTION,
+//                              OOMPH_EXCEPTION_LOCATION);
+//        } // Default case
+//    } // switch Prob_id
+//     
+//     
+//    // Set the string for W_solver.
+//    switch(W_solver)
+//    {
+//      case 0:
+//        w_str = "We";
+//        break;
+//      default:
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "There is an unrecognised W_solver, recognised W_solver:\n"
+//                << "0 = (We) SuperLU solve\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    } // switch
+//
+//    // Set the string for NS_solver
+//    switch(NS_solver)
+//    {
+//      case 0:
+//      {
+//        ns_str = "Ne";
+//        p_str = "";
+//        f_str = "";
+//      }
+//        break;
+//      case 1:
+//        ns_str = "Nl";
+//        break;
+//      default:
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "There is an unrecognised NS_solver, recognised NS_solver:\n"
+//                << "0 = (Ne) SuperLU\n"
+//                << "1 = (Nl) LSC preconditioner\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    } // switch NS_solver
+//    
+//    // If we are using SuperLU for the Navier-Stokes block (NS_solver = 0), 
+//    // the F_solver and P_solver should not be set.
+//    if((NS_solver == 0) && 
+//       (CommandLineArgs::command_line_flag_has_been_set("--p_solver") ||
+//        CommandLineArgs::command_line_flag_has_been_set("--f_solver")))
+//    {
+//      std::ostringstream err_msg;
+//      err_msg << "NS_solver = 0, using SuperLU for the Navier-Stokes block.\n"
+//              << "But you have either --f_solver or --p_solver.\n"
+//              << "These should NOT be set, unless you want to use LSC.\n"
+//              << "In which case, set --ns_solver 1.\n"
+//              << std::endl;
+//      throw OomphLibError(err_msg.str(),
+//                          OOMPH_CURRENT_FUNCTION,
+//                          OOMPH_EXCEPTION_LOCATION);
+//    }
+//
+//    // Now we continue with setting the string for the solvers.
+//    switch(F_solver)
+//    {
+//      case 0:
+//        f_str = "Fe";
+//        break;
+//      case 69:
+//        f_str = "Fa";
+//        break;
+//      case 96:
+//        f_str = "Fray";
+//        break;
+//      case 11:
+//        f_str = "Fh2dp";
+//        break;
+//      case 12:
+//        f_str = "Fhns";
+//        break;
+//      case 13:
+//        f_str = "CLJPGSStrn075";
+//        break;
+//      case 14:
+//        f_str = "FRSGSStrn075";
+//        break;
+//      case 15:
+//        f_str = "FCLJPPilutStrn075";
+//        break;
+//      case 16:
+//        f_str = "FRSPilutStrn075";
+//        break;
+//      case 17:
+//        f_str = "Fray_old"; // I have no short hand for this...
+//        break;
+//      case 81:
+//        f_str = "CLJPGSStrn0668";
+//        break;
+//      case 82:
+//        f_str = "CLJPJStrn0668";
+//        break;
+//      case 83:
+//        f_str = "CLJPPilutStrn0668";
+//        break;
+//      case 84:
+//        f_str = "RSGSStrn0668";
+//        break;
+//      case 85:
+//        f_str = "RSJStrn0668";
+//        break;
+//      case 86:
+//        f_str = "RSPilutStrn0668";
+//        break;
+//      case 2:
+//        f_str = "Fde";
+//        break;
+//      case 3:
+//        f_str = "Fda";
+//        break;
+//      default:
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "There is an unrecognised F_solver, recognised F_solver:\n"
+//                << "Look at rayheader.h\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    }  // switch
+//
+//
+//    switch(P_solver)
+//    {
+//      case 0:
+//        p_str = "Pe";
+//        break;
+//      case 1:
+//        p_str = "Pa";
+//        break;
+//      case 96:
+//        p_str = "Pray";
+//        break;
+//      default:
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "There is an unrecognised P_solver, recognised P_solver:\n"
+//                << "Look at rayheader.h\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    } // switch
+//
+//    // Set the string for viscuous term.
+//    if (Vis == 0)
+//    {
+//      vis_str = "Sim";
+//    }
+//    else if (Vis == 1)
+//    {
+//      vis_str = "Str";
+//    } // else - setting viscuous term.
+//    else
+//    {
+//      std::ostringstream err_msg;
+//      err_msg << "Do not recognise viscuous term: " << Vis << ".\n"
+//              << "Vis = 0 for simple form\n"
+//              << "Vis = 1 for stress divergence form\n"
+//              << std::endl;
+//      throw OomphLibError(err_msg.str(),
+//                          OOMPH_CURRENT_FUNCTION,
+//                          OOMPH_EXCEPTION_LOCATION);
+//    }
+//
+//    // Set Ang_str, this exists for only the Sq problems, not Aw.
+//    std::size_t found = prob_str.find("Sq");
+//    if(found != std::string::npos)
+//    {
+//      if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
+//      {
+//        std::ostringstream strs;
+//        strs << "A" << Ang_deg;
+//        ang_str = strs.str();
+//      }
+//      else
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "You have selected an Sq problem."
+//                << "Please supply the tilting angle with --ang.\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    }
+//    else
+//    {
+//      if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
+//      {
+//        std::ostringstream err_msg;
+//        err_msg << "You have selected a Aw problem, there is no tilting angle.\n"
+//                << "Please take off the --ang command line argument.\n"
+//                << std::endl;
+//        throw OomphLibError(err_msg.str(),
+//                            OOMPH_CURRENT_FUNCTION,
+//                            OOMPH_EXCEPTION_LOCATION);
+//      }
+//    }
+//    
+//    // Set the Reynolds number.
+//    if(Rey >= 0)
+//    {
+//      std::ostringstream strs;
+//      strs << "R" << Rey;
+//      rey_str = strs.str();
+//    }
+//    else
+//    {
+//      std::ostringstream err_msg;
+//      err_msg << "Something has gone wrong, the Reynolds number is negative\n"
+//              << "Rey = " << Rey << "\n"
+//              << "Please set it again using --rey.\n"
+//              << std::endl;
+//      throw OomphLibError(err_msg.str(),
+//                          OOMPH_CURRENT_FUNCTION,
+//                          OOMPH_EXCEPTION_LOCATION);
+//    }
+//    
+//    // Set Noel_str, used for book keeping.
+//    if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
+//    {
+//      std::ostringstream strs;
+//      strs << "N" <<Noel;
+//      noel_str = strs.str();
+//    }
+//    else
+//    {
+//      std::ostringstream err_msg;
+//      err_msg << "Please supply the number of elements in 1D using --noel.\n"
+//              << std::endl;
+//      throw OomphLibError(err_msg.str(),
+//                          OOMPH_CURRENT_FUNCTION,
+//                          OOMPH_EXCEPTION_LOCATION);
+//    }
+//
+//    // Use the diagonal or block diagonal approximation for W block.
+//    if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
+//    {
+//      Use_block_diagonal_w = true;
+//      w_approx_str = "Wbd";
+//    }
+//    else
+//    {
+//      Use_block_diagonal_w = false;
+//      w_approx_str = "Wd";
+//    }
+//
+//    // Set Use_axnorm, if sigma has not been set, 
+//    // norm os momentum block is used.
+//    if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
+//    {
+//      Use_axnorm = false;
+//      
+//      std::ostringstream strs;
+//      strs << "S" << Scaling_sigma;
+//      sigma_str = strs.str();
+//    }
+//
+//    std::string label = prob_str
+//                        + w_str + ns_str + f_str + p_str
+//                        + vis_str + ang_str + rey_str
+//                        + noel_str + w_approx_str + sigma_str;
+//     
+    return "";// label; 
+  } // inlined function create_label
+
   
 
-} // Namespace SquareLagrange
+ /// Traction at the outflow boundary
+ void prescribed_traction(const double& t,
+                          const Vector<double>& x,
+                          Vector<double>& traction)
+ {
+  traction.resize(3);
+  traction[0]=1.0;
+  traction[1]=0.0;
+  traction[2]=0.0;
+ } 
+
+}
 
 
 #endif // End of ifndef RAY_LAGRANGE_HEADER
