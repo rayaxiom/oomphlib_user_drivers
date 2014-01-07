@@ -46,6 +46,7 @@ html/
 
 # OOMPH-LIB result directory
 RESLT
+Validate
 
 ########################################
 # Executables 
@@ -58,6 +59,7 @@ lagrange_step/step_van
 lagrange_sqcurve/sqcurve_po_dirichletall
 lagrange_sqcurve/sqcurve_po_dirichletside
 lagrange_sqcurve/sqcurve_po_neumannside
+lagrange_cube/cube_lgr
 
 # Folders
 lagrange_sqcurve/res_loop_sqcurve_po_dirichletside/

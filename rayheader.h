@@ -63,10 +63,11 @@ bool check_if_in_set(T myarray[], unsigned nval, T number)
   // complain.
   std::pair<typename std::set<T>::iterator,bool> ret;
 
-  // The second in the pair is false if not added. True otherwise.
+  // The second in the pair is false if not added. 
+  // This means it is in the set, so we negate this to make it true.
   ret = myset.insert(number);
   
-  return ret.second;
+  return (!ret.second);
 } // check_if_in_set(...)
 
 //=============================================================================
@@ -1093,7 +1094,7 @@ namespace SquareLagrange
   double Rey_end = 500.0;
 
   // Object to store the linear solver iterations and times.
-  DocLinearSolverInfo* Doc_linear_solver_info_pt;
+  DocLinearSolverInfo* Doc_linear_solver_info_pt = 0;
 
   double f_amg_strength = -1.0;
   double f_amg_damping = -1.0;
@@ -1520,8 +1521,11 @@ namespace CubeLagrange
 
   int Prob_id = -1;
 
+  unsigned Lagrange_multiplier_id = 42;
+
   // These are self explanatory:
   unsigned Vis = 0; //CL, 0 - Simple, 1 - Stress divergence
+  double Ang_deg = 30.0; //CL, Angle in degrees
   double Angx_deg = 30.0; //CL, Angle in degrees
   double Angy_deg = 30.0; //CL, Angle in degrees
   double Angz_deg = 30.0; //CL, Angle in degrees
@@ -1529,6 +1533,7 @@ namespace CubeLagrange
   double Angy = 0.0; //CL, Angle in degrees
   double Angz = 0.0; //CL, Angle in degrees
   double Rey = 100.0; //CL, Reynolds number
+  unsigned Noel = 4; //CL, Number of elements in 1D
   unsigned Noelx = 4; //CL, Number of elements in 1D
   unsigned Noely = 4; //CL, Number of elements in 1D
   unsigned Noelz = 4; //CL, Number of elements in 1D
@@ -1562,7 +1567,7 @@ namespace CubeLagrange
   double Rey_end = 500.0;
 
   // Object to store the linear solver iterations and times.
-  DocLinearSolverInfo* Doc_linear_solver_info_pt;
+  DocLinearSolverInfo* Doc_linear_solver_info_pt = 0;
 
   double f_amg_strength = -1.0;
   double f_amg_damping = -1.0;
@@ -1582,356 +1587,328 @@ namespace CubeLagrange
 
   inline string create_label()
   {
-//    std::string prob_str = "";
-//    std::string w_str = "";
-//    std::string ns_str = "";
-//    std::string f_str = "";
-//    std::string p_str = "";
-//    std::string vis_str = "";
-//    std::string ang_str = "";
-//    std::string rey_str = "";
-//    std::string noel_str = "";
-//    std::string w_approx_str = "";
-//    std::string sigma_str = "";
-//
-//    switch(Prob_id)
-//    {
-//      case 10:
-//        prob_str = "SqTmp";
-//        break;
-//      case 11:
-//        prob_str = "SqPo";
-//        break;
-//      case 12:
-//        prob_str = "SqTf";
-//        break;
-//      case 13:
-//        prob_str = "SqTfPo";
-//        break;
-//      case 20:
-//        prob_str = "AwTmp";
-//        break;
-//      case 21:
-//        prob_str = "AwPo";
-//        break;
-//      case 22:
-//        prob_str = "AwTf";
-//        break;
-//      case 23:
-//        prob_str = "AwTfPo";
-//        break;
-//      default:
-//        {
-//          std::ostringstream err_msg;
-//          err_msg << "There is an unrecognised Prob_id, recognised Prob_id:\n"
-//                  << "10 = (SqTmp) Square, custom stuff...\n"
-//                  << "11 = (SqPo) Square, Parallel outflow (para inflow)\n"
-//                  << "12 = (SqTf) Square, Tangential flow (Semi para inflow)\n"
-//                  << "13 = (SqTfPo) Square, Tangential flow, Parallel outflow (semi para inflow)\n"
-//                  << "\n"
-//                  << "20 = (AwTmp) Annulus wedge, custom stuff...\n"
-//                  << "21 = (AwPo) Annulus wedge, Parallel outflow (para inflow)\n"
-//                  << "22 = (AwTf) Annulus wedge, Tangential flow (semi para inflow)\n"
-//                  << "23 = (AwTfPo) Annulus wedge, Tan. flow, Para. outflow (semi para inflow)\n"
-//                  << std::endl;
-//          throw OomphLibError(err_msg.str(),
-//                              OOMPH_CURRENT_FUNCTION,
-//                              OOMPH_EXCEPTION_LOCATION);
-//        } // Default case
-//    } // switch Prob_id
-//     
-//     
-//    // Set the string for W_solver.
-//    switch(W_solver)
-//    {
-//      case 0:
-//        w_str = "We";
-//        break;
-//      default:
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "There is an unrecognised W_solver, recognised W_solver:\n"
-//                << "0 = (We) SuperLU solve\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    } // switch
-//
-//    // Set the string for NS_solver
-//    switch(NS_solver)
-//    {
-//      case 0:
-//      {
-//        ns_str = "Ne";
-//        p_str = "";
-//        f_str = "";
-//      }
-//        break;
-//      case 1:
-//        ns_str = "Nl";
-//        break;
-//      default:
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "There is an unrecognised NS_solver, recognised NS_solver:\n"
-//                << "0 = (Ne) SuperLU\n"
-//                << "1 = (Nl) LSC preconditioner\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    } // switch NS_solver
-//    
-//    // If we are using SuperLU for the Navier-Stokes block (NS_solver = 0), 
-//    // the F_solver and P_solver should not be set.
-//    if((NS_solver == 0) && 
-//       (CommandLineArgs::command_line_flag_has_been_set("--p_solver") ||
-//        CommandLineArgs::command_line_flag_has_been_set("--f_solver")))
-//    {
-//      std::ostringstream err_msg;
-//      err_msg << "NS_solver = 0, using SuperLU for the Navier-Stokes block.\n"
-//              << "But you have either --f_solver or --p_solver.\n"
-//              << "These should NOT be set, unless you want to use LSC.\n"
-//              << "In which case, set --ns_solver 1.\n"
-//              << std::endl;
-//      throw OomphLibError(err_msg.str(),
-//                          OOMPH_CURRENT_FUNCTION,
-//                          OOMPH_EXCEPTION_LOCATION);
-//    }
-//
-//    // Now we continue with setting the string for the solvers.
-//    switch(F_solver)
-//    {
-//      case 0:
-//        f_str = "Fe";
-//        break;
-//      case 69:
-//        f_str = "Fa";
-//        break;
-//      case 96:
-//        f_str = "Fray";
-//        break;
-//      case 11:
-//        f_str = "Fh2dp";
-//        break;
-//      case 12:
-//        f_str = "Fhns";
-//        break;
-//      case 13:
-//        f_str = "CLJPGSStrn075";
-//        break;
-//      case 14:
-//        f_str = "FRSGSStrn075";
-//        break;
-//      case 15:
-//        f_str = "FCLJPPilutStrn075";
-//        break;
-//      case 16:
-//        f_str = "FRSPilutStrn075";
-//        break;
-//      case 17:
-//        f_str = "Fray_old"; // I have no short hand for this...
-//        break;
-//      case 81:
-//        f_str = "CLJPGSStrn0668";
-//        break;
-//      case 82:
-//        f_str = "CLJPJStrn0668";
-//        break;
-//      case 83:
-//        f_str = "CLJPPilutStrn0668";
-//        break;
-//      case 84:
-//        f_str = "RSGSStrn0668";
-//        break;
-//      case 85:
-//        f_str = "RSJStrn0668";
-//        break;
-//      case 86:
-//        f_str = "RSPilutStrn0668";
-//        break;
-//      case 2:
-//        f_str = "Fde";
-//        break;
-//      case 3:
-//        f_str = "Fda";
-//        break;
-//      default:
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "There is an unrecognised F_solver, recognised F_solver:\n"
-//                << "Look at rayheader.h\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    }  // switch
-//
-//
-//    switch(P_solver)
-//    {
-//      case 0:
-//        p_str = "Pe";
-//        break;
-//      case 1:
-//        p_str = "Pa";
-//        break;
-//      case 96:
-//        p_str = "Pray";
-//        break;
-//      default:
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "There is an unrecognised P_solver, recognised P_solver:\n"
-//                << "Look at rayheader.h\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    } // switch
-//
-//    // Set the string for viscuous term.
-//    if (Vis == 0)
-//    {
-//      vis_str = "Sim";
-//    }
-//    else if (Vis == 1)
-//    {
-//      vis_str = "Str";
-//    } // else - setting viscuous term.
-//    else
-//    {
-//      std::ostringstream err_msg;
-//      err_msg << "Do not recognise viscuous term: " << Vis << ".\n"
-//              << "Vis = 0 for simple form\n"
-//              << "Vis = 1 for stress divergence form\n"
-//              << std::endl;
-//      throw OomphLibError(err_msg.str(),
-//                          OOMPH_CURRENT_FUNCTION,
-//                          OOMPH_EXCEPTION_LOCATION);
-//    }
-//
-//    // Set Ang_str, this exists for only the Sq problems, not Aw.
-//    std::size_t found = prob_str.find("Sq");
-//    if(found != std::string::npos)
-//    {
-//      if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
-//      {
-//        std::ostringstream strs;
-//        strs << "A" << Ang_deg;
-//        ang_str = strs.str();
-//      }
-//      else
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "You have selected an Sq problem."
-//                << "Please supply the tilting angle with --ang.\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    }
-//    else
-//    {
-//      if(CommandLineArgs::command_line_flag_has_been_set("--ang"))
-//      {
-//        std::ostringstream err_msg;
-//        err_msg << "You have selected a Aw problem, there is no tilting angle.\n"
-//                << "Please take off the --ang command line argument.\n"
-//                << std::endl;
-//        throw OomphLibError(err_msg.str(),
-//                            OOMPH_CURRENT_FUNCTION,
-//                            OOMPH_EXCEPTION_LOCATION);
-//      }
-//    }
-//    
-//    // Set the Reynolds number.
-//    if(Rey >= 0)
-//    {
-//      std::ostringstream strs;
-//      strs << "R" << Rey;
-//      rey_str = strs.str();
-//    }
-//    else
-//    {
-//      std::ostringstream err_msg;
-//      err_msg << "Something has gone wrong, the Reynolds number is negative\n"
-//              << "Rey = " << Rey << "\n"
-//              << "Please set it again using --rey.\n"
-//              << std::endl;
-//      throw OomphLibError(err_msg.str(),
-//                          OOMPH_CURRENT_FUNCTION,
-//                          OOMPH_EXCEPTION_LOCATION);
-//    }
-//    
-//    // Set Noel_str, used for book keeping.
-//    if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
-//    {
-//      std::ostringstream strs;
-//      strs << "N" <<Noel;
-//      noel_str = strs.str();
-//    }
-//    else
-//    {
-//      std::ostringstream err_msg;
-//      err_msg << "Please supply the number of elements in 1D using --noel.\n"
-//              << std::endl;
-//      throw OomphLibError(err_msg.str(),
-//                          OOMPH_CURRENT_FUNCTION,
-//                          OOMPH_EXCEPTION_LOCATION);
-//    }
-//
-//    // Use the diagonal or block diagonal approximation for W block.
-//    if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
-//    {
-//      Use_block_diagonal_w = true;
-//      w_approx_str = "Wbd";
-//    }
-//    else
-//    {
-//      Use_block_diagonal_w = false;
-//      w_approx_str = "Wd";
-//    }
-//
-//    // Set Use_axnorm, if sigma has not been set, 
-//    // norm os momentum block is used.
-//    if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
-//    {
-//      Use_axnorm = false;
-//      
-//      std::ostringstream strs;
-//      strs << "S" << Scaling_sigma;
-//      sigma_str = strs.str();
-//    }
-//
-//    std::string label = prob_str
-//                        + w_str + ns_str + f_str + p_str
-//                        + vis_str + ang_str + rey_str
-//                        + noel_str + w_approx_str + sigma_str;
-//     
-    return "";// label; 
+    std::string prob_str = "";
+    std::string w_str = "";
+    std::string ns_str = "";
+    std::string f_str = "";
+    std::string p_str = "";
+    std::string vis_str = "";
+    std::string ang_str = "";
+    std::string rey_str = "";
+    std::string noel_str = "";
+    std::string w_approx_str = "";
+    std::string sigma_str = "";
+
+    switch(Prob_id)
+    {
+      case 10:
+        prob_str = "CuTmp";
+        break;
+      case 11:
+        prob_str = "CuPo";
+        break;
+      case 12:
+        prob_str = "SqTf";
+        break;
+      case 13:
+        prob_str = "SqTfPo";
+        break;
+      case 20:
+        prob_str = "AwTmp";
+        break;
+      case 21:
+        prob_str = "AwPo";
+        break;
+      case 22:
+        prob_str = "AwTf";
+        break;
+      case 23:
+        prob_str = "AwTfPo";
+        break;
+      default:
+        {
+          std::ostringstream err_msg;
+          err_msg << "There is an unrecognised Prob_id, recognised Prob_id:\n"
+                  << "10 = (SqTmp) Square, custom stuff...\n"
+                  << "11 = (SqPo) Square, Parallel outflow (para inflow)\n"
+                  << "12 = (SqTf) Square, Tangential flow (Semi para inflow)\n"
+                  << "13 = (SqTfPo) Square, Tangential flow, Parallel outflow (semi para inflow)\n"
+                  << "\n"
+                  << "20 = (AwTmp) Annulus wedge, custom stuff...\n"
+                  << "21 = (AwPo) Annulus wedge, Parallel outflow (para inflow)\n"
+                  << "22 = (AwTf) Annulus wedge, Tangential flow (semi para inflow)\n"
+                  << "23 = (AwTfPo) Annulus wedge, Tan. flow, Para. outflow (semi para inflow)\n"
+                  << std::endl;
+          throw OomphLibError(err_msg.str(),
+                              OOMPH_CURRENT_FUNCTION,
+                              OOMPH_EXCEPTION_LOCATION);
+        } // Default case
+    } // switch Prob_id
+
+     
+     
+    // Set the string for W_solver.
+    switch(W_solver)
+    {
+      case 0:
+        w_str = "We";
+        break;
+      default:
+      {
+        std::ostringstream err_msg;
+        err_msg << "There is an unrecognised W_solver, recognised W_solver:\n"
+                << "0 = (We) SuperLU solve\n"
+                << std::endl;
+        throw OomphLibError(err_msg.str(),
+                            OOMPH_CURRENT_FUNCTION,
+                            OOMPH_EXCEPTION_LOCATION);
+      }
+    } // switch
+
+    // Set the string for NS_solver
+    switch(NS_solver)
+    {
+      case 0:
+      {
+        ns_str = "Ne";
+        p_str = "";
+        f_str = "";
+      }
+        break;
+      case 1:
+        ns_str = "Nl";
+        break;
+      default:
+      {
+        std::ostringstream err_msg;
+        err_msg << "There is an unrecognised NS_solver, recognised NS_solver:\n"
+                << "0 = (Ne) SuperLU\n"
+                << "1 = (Nl) LSC preconditioner\n"
+                << std::endl;
+        throw OomphLibError(err_msg.str(),
+                            OOMPH_CURRENT_FUNCTION,
+                            OOMPH_EXCEPTION_LOCATION);
+      }
+    } // switch NS_solver
+
+
+    // If we are using SuperLU for the Navier-Stokes block (NS_solver = 0), 
+    // the F_solver and P_solver should not be set.
+    if((NS_solver == 0) && 
+       (CommandLineArgs::command_line_flag_has_been_set("--p_solver") ||
+        CommandLineArgs::command_line_flag_has_been_set("--f_solver")))
+    {
+      std::ostringstream err_msg;
+      err_msg << "NS_solver = 0, using SuperLU for the Navier-Stokes block.\n"
+              << "But you have either --f_solver or --p_solver.\n"
+              << "These should NOT be set, unless you want to use LSC.\n"
+              << "In which case, set --ns_solver 1.\n"
+              << std::endl;
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
+
+    // Now we continue with setting the string for the solvers.
+    switch(F_solver)
+    {
+      case 0:
+        f_str = "Fe";
+        break;
+      case 69:
+        f_str = "Fa";
+        break;
+      case 96:
+        f_str = "Fray";
+        break;
+      case 11:
+        f_str = "Fh2dp";
+        break;
+      case 12:
+        f_str = "Fhns";
+        break;
+      case 13:
+        f_str = "CLJPGSStrn075";
+        break;
+      case 14:
+        f_str = "FRSGSStrn075";
+        break;
+      case 15:
+        f_str = "FCLJPPilutStrn075";
+        break;
+      case 16:
+        f_str = "FRSPilutStrn075";
+        break;
+      case 17:
+        f_str = "Fray_old"; // I have no short hand for this...
+        break;
+      case 81:
+        f_str = "CLJPGSStrn0668";
+        break;
+      case 82:
+        f_str = "CLJPJStrn0668";
+        break;
+      case 83:
+        f_str = "CLJPPilutStrn0668";
+        break;
+      case 84:
+        f_str = "RSGSStrn0668";
+        break;
+      case 85:
+        f_str = "RSJStrn0668";
+        break;
+      case 86:
+        f_str = "RSPilutStrn0668";
+        break;
+      case 2:
+        f_str = "Fde";
+        break;
+      case 3:
+        f_str = "Fda";
+        break;
+      default:
+      {
+        std::ostringstream err_msg;
+        err_msg << "There is an unrecognised F_solver, recognised F_solver:\n"
+                << "Look at rayheader.h\n"
+                << std::endl;
+        throw OomphLibError(err_msg.str(),
+                            OOMPH_CURRENT_FUNCTION,
+                            OOMPH_EXCEPTION_LOCATION);
+      }
+    }  // switch
+
+    switch(P_solver)
+    {
+      case 0:
+        p_str = "Pe";
+        break;
+      case 1:
+        p_str = "Pa";
+        break;
+      case 96:
+        p_str = "Pray";
+        break;
+      default:
+      {
+        std::ostringstream err_msg;
+        err_msg << "There is an unrecognised P_solver, recognised P_solver:\n"
+                << "Look at rayheader.h\n"
+                << std::endl;
+        throw OomphLibError(err_msg.str(),
+                            OOMPH_CURRENT_FUNCTION,
+                            OOMPH_EXCEPTION_LOCATION);
+      }
+    } // switch
+
+    // Set the string for viscuous term.
+    if (Vis == 0)
+    {
+      vis_str = "Sim";
+    }
+    else if (Vis == 1)
+    {
+      vis_str = "Str";
+    } // else - setting viscuous term.
+    else
+    {
+      std::ostringstream err_msg;
+      err_msg << "Do not recognise viscuous term: " << Vis << ".\n"
+              << "Vis = 0 for simple form\n"
+              << "Vis = 1 for stress divergence form\n"
+              << std::endl;
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
+
+    // Set ang_str
+    {
+      std::ostringstream strs;
+      strs << "Ax" << Angx_deg << "y" << Angy_deg << "z" << Angz_deg;
+      ang_str = strs.str();
+    }
+
+    // Set the Reynolds number.
+    if(Rey >= 0)
+    {
+      std::ostringstream strs;
+      strs << "R" << Rey;
+      rey_str = strs.str();
+    }
+    else
+    {
+      std::ostringstream err_msg;
+      err_msg << "Something has gone wrong, the Reynolds number is negative\n"
+              << "Rey = " << Rey << "\n"
+              << "Please set it again using --rey.\n"
+              << std::endl;
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
+
+    // Set Noel_str, used for book keeping.
+    if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
+    {
+      std::ostringstream strs;
+      strs << "N" <<Noel;
+      noel_str = strs.str();
+    }
+    else
+    {
+      std::ostringstream err_msg;
+      err_msg << "Please supply the number of elements in 1D using --noel.\n"
+              << std::endl;
+      throw OomphLibError(err_msg.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+    }
+
+    // Use the diagonal or block diagonal approximation for W block.
+    if(CommandLineArgs::command_line_flag_has_been_set("--bdw"))
+    {
+      Use_block_diagonal_w = true;
+      w_approx_str = "Wbd";
+    }
+    else
+    {
+      Use_block_diagonal_w = false;
+      w_approx_str = "";
+    }
+
+    // Set Use_axnorm, if sigma has not been set, 
+    // norm os momentum block is used.
+    if(CommandLineArgs::command_line_flag_has_been_set("--sigma"))
+    {
+      Use_axnorm = false;
+      
+      std::ostringstream strs;
+      strs << "S" << Scaling_sigma;
+      sigma_str = strs.str();
+    }
+
+    std::string label = prob_str
+                        + w_str + ns_str + f_str + p_str
+                        + vis_str + ang_str 
+                        + rey_str + noel_str + w_approx_str + sigma_str;
+     
+    return label; 
   } // inlined function create_label
 
   
+///// Traction at the outflow boundary
+// void prescribed_traction(const double& t,
+//                          const Vector<double>& x,
+//                          Vector<double>& traction)
+// {
+//  traction.resize(3);
+//  traction[0]=1.0;
+//  traction[1]=0.0;
+//  traction[2]=0.0;
+// } 
 
- /// Traction at the outflow boundary
- void prescribed_traction(const double& t,
-                          const Vector<double>& x,
-                          Vector<double>& traction)
- {
-  traction.resize(3);
-  traction[0]=1.0;
-  traction[1]=0.0;
-  traction[2]=0.0;
- } 
-
-}
+} // End of namespace CubeLagrange
 
 
 #endif // End of ifndef RAY_LAGRANGE_HEADER
