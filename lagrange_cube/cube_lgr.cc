@@ -39,7 +39,6 @@
 #include "meshes/simple_cubic_mesh.h"
 #include "meshes/simple_cubic_tet_mesh.h"
 
-using namespace std;
 using namespace oomph;
 
 //===start_of_namespace=================================================
@@ -179,9 +178,9 @@ namespace oomph {
 //   }
 // };
    
-////===========start_face_geometry==============================================
+////===========start_face_geometry=============================================
 ///// FaceGeometry of wrapped element is the same as the underlying element
-////============================================================================
+////===========================================================================
 // template<class ELEMENT>
 // class FaceGeometry<BulkFluidSubjectToLagrangeMultiplierElement<ELEMENT> > :
 //  public virtual FaceGeometry<ELEMENT>
@@ -193,7 +192,7 @@ namespace oomph {
 //========================================================================
 /// \short A Sloping Mesh  class.
 ///
-/// derived from RectangularQuadMesh:
+/// derived from SimpleCubicMesh:
 /// the same mesh rotated with an angle phi
 //========================================================================
  template<class ELEMENT> 
@@ -252,6 +251,7 @@ public:
  /// Constructor
  DrivenCavityThreeDProblem();
 
+
  ///Fix pressure in element e at pressure dof pdof and set to pvalue
  void fix_pressure(const unsigned &e, const unsigned &pdof, 
                    const double &pvalue)
@@ -282,6 +282,17 @@ public:
 
 private:
 
+ void set_prec_and_solver();
+
+
+ // Number the boundaries.
+ unsigned Front_bound;
+ unsigned Back_bound;
+ unsigned Left_bound;
+ unsigned Right_bound;
+ unsigned Top_bound;
+ unsigned Bottom_bound;
+
  /// ID of imposed flow boundary
  unsigned Imposed_flow_boundary;
 
@@ -291,12 +302,20 @@ private:
  /// Pointer to the "bulk" mesh
  Mesh* Bulk_mesh_pt;
  
- /// Pointer to the "surface" mesh for Traction elements
+ /// Pointer to the "surface" mesh for Lagrange multiplier elements
  Mesh* Surface_mesh_pt1;
  
  /// Pointer to the "surface" mesh for Lagrange multiplier elements
  Mesh* Surface_mesh_pt2;
 
+ // Preconditioner
+ Preconditioner* Prec_pt;
+
+ // Solver
+ IterativeLinearSolver* Solver_pt;
+
+ // Object to hold the iteration counts.
+ DocLinearSolverInfo* Doc_linear_solver_info_pt;
 };
 
 
@@ -304,22 +323,27 @@ private:
 //==start_of_constructor==================================================
 /// Constructor for DrivenCavity problem 
 // 
-//
-//
-//                                     4
-//      ____________
-//     /|          /|
-//    / |         / |          5
-//   /  |        /  |         
-//  /   |       /   |
-// /____|______/    |     1         3
+//                                               z
+//                                     4 Back    |
+//      ____________                             |
+//     /|          /|                            |_______y
+//    / |         / |          5 Top            /
+//   /  |        /  |                          /
+//  /   |       /   |                        x/
+// /____|______/    |     1 Left    3 Right
 // |    |______|____|      
 // |   /       |   /
-// |  /        |  /            0
+// |  /        |  /            0 Bottom
 // | /         | /
-// |/__________|/        2
+// |/__________|/        2 Front
 //  
 //
+// Front_bound = 2;
+// Back_bound = 4;
+// Left_bound = 1;
+// Right_bound = 3;
+// Top_bound = 5;
+// Bottom_bound = 0;
 //
 // Imposed_flow_boundary=4;
 // Neumann_boundary=2;
@@ -330,59 +354,50 @@ DrivenCavityThreeDProblem<ELEMENT>::DrivenCavityThreeDProblem()
 { 
  namespace CL = CubeLagrange;
 
- // Setup mesh
- 
- // # of elements in x-direction
- unsigned n_x=CL::Noelx;
- 
- // # of elements in y-direction
- unsigned n_y=CL::Noely;
+ // Set the boundaries so we do not have to use numbers!
+ Front_bound = 2;
+ Back_bound = 4;
+ Left_bound = 1;
+ Right_bound = 3;
+ Top_bound = 5;
+ Bottom_bound = 0;
 
- // # of elements in z-direction
- unsigned n_z=CL::Noelz;
- 
- // Domain length in x-direction
- double l_x=CL::Lx;
- 
- // Domain length in y-direction
- double l_y=CL::Ly;
- 
- // Domain length in y-direction
- double l_z=CL::Lz;
- 
+ // Set the boundaries, you see, it's much easier to read with the variable
+ // names from above.
+ Imposed_flow_boundary = Back_bound;
+ Neumann_boundary = Front_bound;
+
+ // If the pointer to the documentation object is not null (i.e. it has been
+ // set), then we set it.
+ if(CL::Doc_linear_solver_info_pt != 0)
+ {
+   Doc_linear_solver_info_pt = CL::Doc_linear_solver_info_pt;
+ }
 
  // Build and assign mesh
  Bulk_mesh_pt = 
-  new SlopingCubicMesh<ELEMENT >(n_x,n_y,n_z,l_x,l_y,l_z,
+  new SlopingCubicMesh<ELEMENT >(CL::Noelx, CL::Noely, CL::Noelz,
+                                 CL::Lx, CL::Ly, CL::Lz,
                                  CL::Angx,CL::Angy,CL::Angz);
- Imposed_flow_boundary=4;
- Neumann_boundary=2;
 
- // Create "surface mesh" that will contain only the prescribed-traction 
+ // Create "surface mesh" that will contain only the Lagrange multiplier 
  // elements.
-// Surface_mesh_pt1 = new Mesh;
+ Surface_mesh_pt1 = new Mesh;
 
-// Create "surface mesh" that will contain only the Lagrange multiplier 
- // elements.
- Surface_mesh_pt2 = new Mesh;
-// 
-// create_traction_elements();
-// 
  create_parall_outflow_lagrange_elements(Neumann_boundary,
                                          Bulk_mesh_pt,
-                                         Surface_mesh_pt2);
+                                         Surface_mesh_pt1);
  
-// // Add the two sub meshes to the problem
+ // Add the two sub meshes to the problem
  add_sub_mesh(Bulk_mesh_pt);
-// add_sub_mesh(Surface_mesh_pt1);
- add_sub_mesh(Surface_mesh_pt2);
+ add_sub_mesh(Surface_mesh_pt1);
+// add_sub_mesh(Surface_mesh_pt2);
 
-// // Combine all submeshes into a single Mesh
+ // Combine all submeshes into a single Mesh
  build_global_mesh();
  
-// // Set the boundary conditions for this problem: All nodes are
-// // free by default -- just pin the ones that have Dirichlet conditions
-// // here. 
+ // Set the boundary conditions for this problem: All nodes are
+ // free by default. 
  unsigned num_bound = Bulk_mesh_pt->nboundary();
  for(unsigned ibound=0;ibound<num_bound;ibound++)
   {
@@ -390,7 +405,8 @@ DrivenCavityThreeDProblem<ELEMENT>::DrivenCavityThreeDProblem()
    for (unsigned inod=0;inod<num_nod;inod++)
     {
      // Loop over values (u, v and w velocities)
-     for (unsigned i=0;i<3;i++)
+     unsigned spatial_dim = 3;
+     for (unsigned i=0;i<spatial_dim;i++)
       {
        Bulk_mesh_pt->boundary_node_pt(ibound,inod)->pin(i); 
       }
@@ -418,16 +434,18 @@ DrivenCavityThreeDProblem<ELEMENT>::DrivenCavityThreeDProblem()
      +y*cos(-CL::Angy)*sin(-CL::Angx)
      +z*cos(-CL::Angx)*cos(-CL::Angy);
       
-    // The imposed velocity
+    // The imposed velocity along the x boundary.
     double u = 0.0;
-    if (tilt_back_y>0.5)
-     {
-      u=(tilt_back_y-0.5)*(1.0-tilt_back_y)*(tilt_back_z)*(1.0-tilt_back_z);
-     }
-    else
-     {
-      u=-(tilt_back_y)*(0.5-tilt_back_y)*(tilt_back_z)*(1.0-tilt_back_z);
-     }
+    u=(tilt_back_y)*(1.0-tilt_back_y)*(tilt_back_z)*(1.0-tilt_back_z);
+
+//    if (tilt_back_y>0.5)
+//     {
+//      u=(tilt_back_y-0.5)*(1.0-tilt_back_y)*(tilt_back_z)*(1.0-tilt_back_z);
+//     }
+//    else
+//     {
+//      u=-(tilt_back_y)*(0.5-tilt_back_y)*(tilt_back_z)*(1.0-tilt_back_z);
+//     }
       
     // Now apply Rxyz to u, using rotation matrices.
     // We have velocity in the x direction only.
@@ -482,7 +500,382 @@ DrivenCavityThreeDProblem<ELEMENT>::DrivenCavityThreeDProblem()
  
  // Setup equation numbering scheme
  cout <<"Number of equations: " << assign_eqn_numbers() << std::endl; 
+
+ set_prec_and_solver();
  
+}
+
+//============RAYRAY===========
+/// RAYRAY
+//=======================================================================
+template<class ELEMENT>
+void DrivenCavityThreeDProblem<ELEMENT>::set_prec_and_solver()
+{
+  // Alias the namespace for convenience
+  namespace CL = CubeLagrange;
+
+  ////// Build the preconditioner
+  LagrangeEnforcedflowPreconditioner* prec_pt
+    = new LagrangeEnforcedflowPreconditioner;
+
+  Prec_pt = prec_pt;
+
+  Vector<Mesh*> mesh_pt;
+  mesh_pt.resize(2);
+  mesh_pt[0] = Bulk_mesh_pt;
+  mesh_pt[1] = Surface_mesh_pt1;
+  //meshes_pt[2] = Surface_mesh_T_pt;
+  
+  prec_pt->set_meshes(mesh_pt);
+
+  if(!CL::Use_axnorm)
+  {
+    prec_pt->scaling_sigma() = CL::Scaling_sigma;
+  }
+
+ // W solver. SuperLU is default so we do nothing here.
+ if(CL::W_solver == 0)
+ {
+ }
+ else
+ {
+   std::cout << "Other W solvers not complemented yet. Using default SuperLU"
+             << std::endl;
+ }
+
+ // The preconditioner for the fluid block:
+ if(CL::NS_solver == 0) // Exact solve.
+ {}
+ else if(CL::NS_solver == 1) // LSC
+ {
+   NavierStokesSchurComplementPreconditioner* ns_preconditioner_pt =
+     new NavierStokesSchurComplementPreconditioner(this);
+
+   prec_pt->set_navier_stokes_lsc_preconditioner(ns_preconditioner_pt);
+   ns_preconditioner_pt->set_navier_stokes_mesh(Bulk_mesh_pt);
+
+   // F block solve
+   // Preconditioner for the F block:
+   Preconditioner* f_preconditioner_pt = 0;
+   // CL::F_solver == 0 is default, so do nothing.
+   if(CL::F_solver == 11)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_2D_poison_problem();
+#endif
+   }
+   else if(CL::F_solver == 12)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_navier_stokes_momentum_block();
+#endif
+   }
+   else if(CL::F_solver == 13)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPGSStrn075();
+#endif
+   }
+   else if(CL::F_solver == 14)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSGSStrn075();
+#endif
+   }
+   else if(CL::F_solver == 15)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPPilutStrn075();
+#endif
+   }
+   else if(CL::F_solver == 16)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSPilutStrn075();
+#endif
+   }
+   else if(CL::F_solver == 17)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_augmented_momentum_block();
+#endif
+   }
+   else if(CL::F_solver == 81)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPGSStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 82)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPJStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 83)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_CLJPPilutStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 84)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSGSStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 85)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSJStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 86)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // LSC takes type "Preconditioner".
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_for_RSPilutStrn0668();
+#endif
+   }
+   else if(CL::F_solver == 2)
+   {
+//     f_preconditioner_pt = new RayBlockDiagonalPreconditioner<CRDoubleMatrix>;
+     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
+   }
+   else if(CL::F_solver == 3)
+   {
+     f_preconditioner_pt = new BlockDiagonalPreconditioner<CRDoubleMatrix>;
+#ifdef OOMPH_HAS_HYPRE
+     dynamic_cast<BlockDiagonalPreconditioner<CRDoubleMatrix>* >
+       (f_preconditioner_pt)->set_subsidiary_preconditioner_function
+       (Hypre_Subsidiary_Preconditioner_Helper::set_hypre_for_2D_poison_problem);
+#endif
+   }
+   else if (CL::F_solver == 69)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // AMG coarsening: Ruge-Stuben
+     RayGlobalAMGParam::amg_coarsening = 1;
+     
+     // AMG smoother: Gauss-Seidel
+     RayGlobalAMGParam::amg_smoother=0;
+     
+     // There is no damping with GS, otherwise we set the parameter:
+     // RayGlobalAMGParam::amg_damping
+
+     // Different amg strength for simple/stress divergence for viscuous term.
+     if(CL::Vis == 0)
+     {
+       // Simple form
+       RayGlobalAMGParam::amg_strength = 0.25;
+     }
+     else
+     {
+       // Stress divergence form
+       RayGlobalAMGParam::amg_strength = 0.668;
+     }
+     
+     // Setup the preconditioner.
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_using_2D_poisson_base();
+#endif
+   }
+   else if (CL::F_solver == 96)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     // AMG coarsening:
+     // Set: RayGlobalAMGParam::amg_coarsening = 
+     // 0 - CLJP
+     // 1 - RS
+     
+     // AMG smoother:
+     // Set: RayGlobalAMGParam::amg_smoother = 
+     // 0 - Jacobi (Need to set damping as well)
+     // 1 - Gauss-Seidel
+     // 2 - Pilut
+     
+     // There is no damping with GS, otherwise we set the parameter:
+     // RayGlobalAMGParam::amg_damping
+
+     RayGlobalAMGParam::amg_strength = CL::f_amg_strength;
+     RayGlobalAMGParam::amg_damping = CL::f_amg_damping;
+     RayGlobalAMGParam::amg_coarsening = CL::f_amg_coarsening;
+     RayGlobalAMGParam::amg_smoother = CL::f_amg_smoother;
+     RayGlobalAMGParam::amg_iterations = CL::f_amg_iterations;
+     RayGlobalAMGParam::amg_smoother_iterations = CL::f_amg_smoother_iterations;
+     RayGlobalAMGParam::print_hypre = CL::Print_hypre;
+
+
+     // Different amg strength for simple/stress divergence for viscuous term.
+     if(RayGlobalAMGParam::amg_strength < 0.0)
+     {
+       if(CL::Vis == 0)
+       {
+         // Simple form
+         RayGlobalAMGParam::amg_strength = 0.25;
+       }
+       else
+       {
+         // Stress divergence form
+         RayGlobalAMGParam::amg_strength = 0.668;
+       }
+     }
+     
+     // Setup the preconditioner.
+     f_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::
+       set_hypre_ray();
+#endif
+   }
+
+   // Set the preconditioner in the LSC preconditioner.
+   ns_preconditioner_pt->set_f_preconditioner(f_preconditioner_pt);
+   
+   // P block solve
+   //CL::P_solver == 0 is default, so do nothing.
+   if(CL::P_solver == 1)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     Preconditioner* p_preconditioner_pt = new HyprePreconditioner;
+
+     HyprePreconditioner* hypre_preconditioner_pt =
+       static_cast<HyprePreconditioner*>(p_preconditioner_pt);
+
+     Hypre_default_settings::
+     set_defaults_for_2D_poisson_problem(hypre_preconditioner_pt);
+
+     ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
+#endif
+   }
+   else if(CL::P_solver == 96)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     Preconditioner* p_preconditioner_pt = 0;
+     
+//* 
+     RayGlobalAMGParam::amg_iterations = CL::p_amg_iterations;
+     RayGlobalAMGParam::amg_smoother_iterations = CL::p_amg_smoother_iterations;
+     RayGlobalAMGParam::amg_smoother = CL::p_amg_smoother;
+     RayGlobalAMGParam::amg_strength = CL::p_amg_strength;
+   //RayGlobalAMGParam::amg_damping = CL::p_amg_damping;
+     RayGlobalAMGParam::amg_coarsening = CL::p_amg_coarsening;
+     RayGlobalAMGParam::print_hypre = CL::Print_hypre;
+
+//     std::cout << "p_amg_iterations:" << CL::p_amg_iterations << std::endl; 
+//     std::cout << "p_amg_smoother_iterations" << CL::p_amg_smoother_iterations << std::endl; 
+//     std::cout << "p_amg_strength" << CL::p_amg_strength << std::endl;
+//     std::cout << "p_amg_coarsening" << CL::p_amg_coarsening << std::endl; 
+// */
+
+     p_preconditioner_pt = Hypre_Subsidiary_Preconditioner_Helper::set_hypre_ray();
+
+     ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
+#endif
+   }
+   else if(CL::P_solver == 2)
+   {
+#ifdef OOMPH_HAS_HYPRE
+     Preconditioner* p_preconditioner_pt = new HyprePreconditioner;
+
+     HyprePreconditioner* hypre_preconditioner_pt =
+       static_cast<HyprePreconditioner*>(p_preconditioner_pt);
+
+     hypre_preconditioner_pt->hypre_method() = HyprePreconditioner::BoomerAMG;
+
+     // Setup v-cycles
+     hypre_preconditioner_pt->set_amg_iterations(2);
+     hypre_preconditioner_pt->amg_smoother_iterations() = 2;
+     
+     // Setup smoother
+     // simple: 0 - DJ, 1 - GS
+     // compelx: Pilut - 7
+     hypre_preconditioner_pt->amg_using_simple_smoothing();
+     hypre_preconditioner_pt->amg_simple_smoother() = 0;
+     // only applicable for DJ
+     hypre_preconditioner_pt->amg_damping() = 0.8;
+
+     // Setup coarsening
+     // 0 - CLJP
+     // 1 - RS
+     hypre_preconditioner_pt->amg_coarsening() = 1;
+
+     ns_preconditioner_pt->set_p_preconditioner(p_preconditioner_pt);
+#endif
+
+   }
+ } // if for using LSC as NS prec.
+ else
+ {
+   pause("There is no solver for NS.");
+ }
+
+
+ // Set the doc info for book keeping purposes.
+ prec_pt->set_doc_linear_solver_info_pt(CL::Doc_linear_solver_info_pt);
+
+ if(CL::Use_block_diagonal_w)
+ {
+   prec_pt->use_block_diagonal_w_block();
+ }
+ else
+ {
+   prec_pt->use_diagonal_w_block();
+ }
+
+ if(CL::Doc_prec)
+ {
+   prec_pt->enable_doc_prec();
+ }
+
+ // Set the label, use to output information from the preconditioner, such
+ // as the block matrices and the rhs vector
+ prec_pt->set_label_pt(&CL::Label);
+ prec_pt->set_doc_prec_directory_pt(&CL::Doc_prec_dir);
+
+ // Build solve and preconditioner
+#ifdef OOMPH_HAS_TRILINOS
+ TrilinosAztecOOSolver* trilinos_solver_pt = new TrilinosAztecOOSolver;
+ trilinos_solver_pt->solver_type() = TrilinosAztecOOSolver::GMRES;
+ Solver_pt = trilinos_solver_pt;
+ CL::Using_trilinos_solver = true;
+#else
+ Solver_pt = new GMRES<CRDoubleMatrix>;
+ // We use RHS preconditioning. Note that by default,
+ // left hand preconditioning is used.
+ static_cast<GMRES<CRDoubleMatrix>*>(Solver_pt)->set_preconditioner_RHS();
+ CL::Using_trilinos_solver = false;
+#endif
+
+ Solver_pt->tolerance() = 1.0e-6;
+ this->newton_solver_tolerance() = 1.0e-6;
+
+ // Set solver and preconditioner
+ Solver_pt->preconditioner_pt() = Prec_pt;
+ linear_solver_pt() = Solver_pt;
 }
 
 
@@ -626,7 +1019,7 @@ create_parall_outflow_lagrange_elements(const unsigned &b,
       }
     }
   }
-}
+} // FoFunc create_parall_outflow_lagrange_elements(...)
 
 
 
@@ -903,34 +1296,31 @@ int main(int argc, char* argv[])
 
  if(CommandLineArgs::command_line_flag_has_been_set("--noel"))
  {
+   // This will use the copy constructor.
    CL::Noelx = CL::Noel;
    CL::Noely = CL::Noel;
    CL::Noelz = CL::Noel;
  }
 
- DrivenCavityThreeDProblem<QTaylorHoodElement<3> > problem;
+ CL::Label = CL::create_label();
 
- 
+ time_t rawtime;
+ time(&rawtime);
+
+ std::cout << "RAYDOING: "
+           << CL::Label
+           << " on " << ctime(&rawtime) << std::endl;
+    
+ //problem.distribute();
+
+ DrivenCavityThreeDProblem<QTaylorHoodElement<3> > problem;
 
  // Set up doc info
  DocInfo doc_info;
  doc_info.number()=0;
  doc_info.set_directory("RESLT");
  
- //Doc number of gmres iterations
-// ofstream out_file;
-
-// CL::Angx = GParam::pi/6;
-// CL::Angy = GParam::pi/6;
-// CL::Angz = GParam::pi/6;
-     
-
-// DrivenCavityThreeDProblem<
-//  BulkFluidSubjectToLagrangeMultiplierElement<
-//  QTaylorHoodElement<3> > > problem(
-//   n_el);
-
-// Solve the problem 
+ // Solve the problem 
  problem.newton_solve();
            
  // Doc solution

@@ -41,9 +41,14 @@ PROGRAM="cube_lgr"
 #mkdir $TEMPVALIDATADIR
 
 #RUNARGUMENTS="--dist_prob --doc_soln soln_dir --doc_prec prec_dir --prob_id 11 --visc 1 --angx 0 --angy 0 --angz 0 --rey 100 --noel 4"
-RUNARGUMENTS="--dist_prob --doc_soln soln_dir --doc_prec prec_dir --prob_id 11 --visc 1 --angx 0 --angy 0 --angz 0 --rey 0 --noel 4"
+RUNARGUMENTS="--dist_prob --doc_soln soln_dir --prob_id 11 --visc 1 --angx 30 --angy 30 --angz 30 --rey 100 --noel 4" #--bdw
 
-make $PROGRAM && mpirun -np 1 $PROGRAM $RUNARGUMENTS
+PRECARGUMENTS="--w_solver 0 --ns_solver 1 --f_solver 0 --p_solver 0 "
+
+FINALRUNCOMMAND="mpirun -np 1 $PROGRAM $PRECARGUMENTS $RUNARGUMENTS"
+echo "Doing $FINALRUNCOMMAND"
+
+make $PROGRAM && $FINALRUNCOMMAND
 
 
 
